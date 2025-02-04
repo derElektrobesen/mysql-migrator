@@ -124,7 +124,7 @@ function parse_args() {
 		fi
 	done
 
-	local not_found=$(echo "${required_flags[@]} ${required_flags_passed[@]}" | tr ' ' '\n' | sort | uniq -c | grep -v '2 ' | awk '{print $2}')
+	local not_found=$(echo "${required_flags[@]} ${required_flags_passed[@]}" | tr ' ' '\n' | sort | uniq -c | grep -vP '^\s*2 ' | awk '{print $2}')
 
 	for x in "${not_found[@]}"; do
 		if [ "$x" != "" ]; then
@@ -300,11 +300,12 @@ function make_pgloader_tables_to_migrate_cmd() {
 		tables_to_import_q="INCLUDING ONLY TABLE NAMES MATCHING"
 
 		local n=0
-		for t in "${tables_to_migrate[@]}"; do
+		local tables=( $(list_source_tables) )
+		for t in "${tables[@]}"; do
 			n=$((n+1))
 
 			local suffix=""
-			if [ $n -lt ${#tables_to_migrate[@]} ]; then
+			if [ $n -lt ${#tables[@]} ]; then
 				suffix=","
 			fi
 
@@ -317,8 +318,22 @@ function make_pgloader_tables_to_migrate_cmd() {
 	echo "$tables_to_import_q"
 }
 
-function make_pgloader_after_queries() {
-	local -n queries="$1"
+function make_pgloader_rename_queries() {
+	local table_name="$1"
+	local -n queries="$2"
+
+	local table_name_lc=$(echo "$table_name" | perl -ne 'print lc')
+	if [ "$table_name_lc" != "$table_name" ]; then
+		queries+=("ALTER TABLE $(q ${postgres_conf[schema_name]}).$(q $table_name_lc) RENAME TO $(q $table_name)")
+	fi
+
+	for col_name in $(list_columns_in_source_table $table_name); do
+		local col_name_lc=$(echo "$col_name" | perl -ne 'print lc')
+
+		if [ "$col_name" != "$col_name_lc" ]; then
+			queries+=("ALTER TABLE $(q ${postgres_conf[schema_name]}).$(q $table_name) RENAME COLUMN $(q $col_name_lc) TO $(q $col_name)")
+		fi
+	done
 }
 
 function make_pgloader_after_queries() {
@@ -330,7 +345,9 @@ function make_pgloader_after_queries() {
 		after_queries+=("ALTER DATABASE $(q ${postgres_conf[db_name]}) SET search_path = $(q ${postgres_conf[schema_name]}), public")
 	fi
 
-	
+	for t in $(list_source_tables); do
+		make_pgloader_rename_queries "$t" after_queries
+	done
 
 	local after_load_do=""
 	if [ ${#after_queries[@]} -ne 0 ]; then
@@ -375,7 +392,7 @@ function call_psql_real() {
 	local db_name="$2"
 
 	echo "$cmd" | \
-		PGPASSWORD=${postgres_conf[pass]} ${binaries[psql]} \
+		PGPASSWORD="${postgres_conf[pass]}" ${binaries[psql]} \
 			--host ${postgres_conf[host]} \
 			--port ${postgres_conf[port]} \
 			--username ${postgres_conf[login]} \
@@ -385,34 +402,31 @@ function call_psql_real() {
 }
 
 function call_mysql_real() {
-	error "not implemented"
+	local cmd="$1"
+	local db_name="$2"
+
+	echo "$cmd" | \
+		MYSQL_PWD="${mysql_conf[pass]}" ${binaries[mysql]} \
+			--host=${mysql_conf[host]} \
+			--port=${mysql_conf[port]} \
+			--user=${mysql_conf[login]} \
+			$db_name 2>"$tmp_file" | \
+		tail -n +2
 }
 
-function call_psql_expect_error() {
-	# Usage: read res err < <(call_psql_expect_error ...)
+function call_db_expect_error() {
+	# Usage: read res err < <(call_db_expect_error ...)
 	# If expect_error == 1, res will contain all lines with `|` delimiter
 	# err contains error message
 
 	local cmd="$1"
 	local expect_error="$2"
-
-	local db_name="${postgres_conf[db_name]}"
-	if [[ "${3+xxx}" == "xxx" ]] && [ "$3" != "" ]; then
-		db_name="$3"
-	fi
+	local db_name="$3"
+	local callee="$4"
 
 	trace "DB $db_name; QUERY: $cmd"
 
-	local res=$( \
-		echo "$cmd" | \
-		PGPASSWORD=${postgres_conf[pass]} ${binaries[psql]} \
-			--host ${postgres_conf[host]} \
-			--port ${postgres_conf[port]} \
-			--username ${postgres_conf[login]} \
-			$db_name 2>"$tmp_file" | \
-		tail -n +3 | \
-		head -n -2 \
-	)
+	local res=$($callee "$cmd" "$db_name")
 
 	local err_msg=""
 	if [ -s "$tmp_file" ]; then
@@ -434,6 +448,18 @@ function call_psql_expect_error() {
 	fi
 }
 
+function call_psql_expect_error() {
+	local cmd="$1"
+	local expect_error="$2"
+
+	local db_name="${postgres_conf[db_name]}"
+	if [[ "${3+xxx}" == "xxx" ]] && [ "$3" != "" ]; then
+		db_name="$3"
+	fi
+
+	call_db_expect_error "$cmd" "$expect_error" "$db_name" call_psql_real
+}
+
 function call_psql() {
 	# multiline result will be returned
 	local db_name=""
@@ -442,6 +468,28 @@ function call_psql() {
 	fi
 
 	call_psql_expect_error "$1" 0 "$db_name"
+}
+
+function call_mysql_expect_error() {
+	local cmd="$1"
+	local expect_error="$2"
+
+	local db_name="${mysql_conf[db_name]}"
+	if [[ "${3+xxx}" == "xxx" ]] && [ "$3" != "" ]; then
+		db_name="$3"
+	fi
+
+	call_db_expect_error "$cmd" "$expect_error" "$db_name" call_mysql_real
+}
+
+function call_mysql() {
+	# multiline result will be returned
+	local db_name=""
+	if [[ "${2+xxx}" == "xxx" ]]; then
+		db_name="$2"
+	fi
+
+	call_mysql_expect_error "$1" 0 "$db_name"
 }
 
 function modify() {
@@ -536,7 +584,7 @@ function cleanup_postgres() {
 		error "unable to drop database ${postgres_conf[db_name]}: $err_msg"
 	fi
 
-	info "database $(magenta ${postgres_conf[db_name]}) dropped"
+	info "database ${postgres_conf[db_name]} $(red dropped)"
 }
 
 function run_cleanup() {
@@ -557,7 +605,43 @@ function disable_indexes_impl() {
 }
 
 function list_tables() {
+	# Function returns a list of all tables in Postgres DB.
+	# XXX: List could contain not migrated tables
+	# TODO: check database is empty before migration
 	call_psql "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = '${postgres_conf[schema_name]}'"
+}
+
+function list_source_tables() {
+	# If there is a --tables option, function checks all tables in the list are present and
+	# returns this list in case-sensitive mode
+	#
+	# If --tables option is not present, returns all tables in database
+
+	local tables=$(call_mysql "$(\
+		echo "SELECT table_name FROM " \
+			"INFORMATION_SCHEMA.TABLES " \
+			"WHERE TABLE_TYPE = 'BASE TABLE' " \
+			"AND TABLE_SCHEMA = '${mysql_conf[db_name]}'" \
+		)")
+
+	if [ ${#tables_to_migrate[@]} -eq 0 ]; then
+		echo "$tables"
+		return
+	fi
+
+	for t in "${tables_to_migrate[@]}"; do
+		local res=$(echo "$tables" | grep -iw "$t")
+		if [ "$res" == "" ]; then
+			error "table '$t' not found in mysql database"
+		fi
+
+		echo "$res"
+	done
+}
+
+function list_columns_in_source_table() {
+	local table_name="$1"
+	call_mysql "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='${mysql_conf[db_name]}' AND TABLE_NAME='$table_name'"
 }
 
 function disable_indexes() {
