@@ -717,7 +717,7 @@ pipelines:
           fetchSize: 100000
 
           sdk.batch.size: 100000
-          sdk.batch.delay: "100ms"
+          #sdk.batch.delay: 100ms # TODO: https://github.com/ConduitIO/conduit-commons/issues/169
       - id: postgresql-destination
         type: destination
         plugin: "postgres-hacked" # https://github.com/ConduitIO/conduit-connector-postgres
@@ -726,7 +726,7 @@ pipelines:
           table: "{{ index .Metadata \\"opencdc.collection\\" | printf \\"%q\\" }}"
 
           sdk.batch.size: 100000
-          sdk.batch.delay: "100ms"
+          #sdk.batch.delay: 100ms # TODO: https://github.com/ConduitIO/conduit-commons/issues/169
 EOM
 }
 

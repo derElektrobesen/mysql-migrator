@@ -291,6 +291,10 @@ github.com/denis-tingaikin/go-header v0.5.0 h1:SRdnP5ZKvcO9KKRP1KJrhFR3RrlGuD+42
 github.com/denis-tingaikin/go-header v0.5.0/go.mod h1:mMenU5bWrok6Wl2UsZjy+1okegmwQ3UgWl4V1D8gjlY=
 github.com/derElektroBesen/conduit-connector-mysql v0.0.0-20250205133945-75cf03d5c43f h1:g/NDlMll17lwMZsX/Eq0bFiox1ftZhdCFtxUaPCQOO8=
 github.com/derElektroBesen/conduit-connector-mysql v0.0.0-20250205133945-75cf03d5c43f/go.mod h1:ZA81lE2hKfhakRA2xz5ng3ayQYTSTTLipackz7Z4Gik=
+github.com/derElektroBesen/conduit-connector-mysql v0.0.0-20250205144727-1a6628a3aa1b h1:pYxI8RgguiLLYQZiCnmqs9Swm5BK6kUN+xbYXrRrnaI=
+github.com/derElektroBesen/conduit-connector-mysql v0.0.0-20250205144727-1a6628a3aa1b/go.mod h1:QZgLb4s0bYiphC23wSAgQxtdXANqKheeUa7qSGh0yzo=
+github.com/derElektroBesen/conduit-connector-mysql v0.0.0-20250205163214-33d86462ae31 h1:NAEwjG0WjaVaG8jqs3jcePkVE/DCO5RxkyxXT1dzYek=
+github.com/derElektroBesen/conduit-connector-mysql v0.0.0-20250205163214-33d86462ae31/go.mod h1:0L6yhDvES/B9GjFmlVSkHXZxM15AK3u6URyuvEv5fy8=
 github.com/derElektroBesen/conduit-connector-postgres v0.0.0-20250205135131-a7f11f9ae143 h1:Bx0yyp5qEOmV6I40ysdy12sYjzbPYgFsKvvmVAbVcak=
 github.com/derElektroBesen/conduit-connector-postgres v0.0.0-20250205135131-a7f11f9ae143/go.mod h1:xYF3/ZU0sGPwqoj1RLMUC0LtVdQX3aNhFGIo1h/10/U=
 github.com/dgraph-io/badger/v4 v4.5.0 h1:TeJE3I1pIWLBjYhIYCA1+uxrjWEoJXImFBMEBVSm16g=
@@ -347,6 +351,8 @@ github.com/gammazero/deque v1.0.0 h1:LTmimT8H7bXkkCy6gZX7zNLtkbz4NdS2z8LZuor3j34
 github.com/gammazero/deque v1.0.0/go.mod h1:iflpYvtGfM3U8S8j+sZEKIak3SAKYpA5/SQewgfXDKo=
 github.com/ghostiam/protogetter v0.3.8 h1:LYcXbYvybUyTIxN2Mj9h6rHrDZBDwZloPoKctWrFyJY=
 github.com/ghostiam/protogetter v0.3.8/go.mod h1:WZ0nw9pfzsgxuRsPOFQomgDVSWtDLJRfQJEhsGbmQMA=
+github.com/ghostiam/protogetter v0.3.9 h1:j+zlLLWzqLay22Cz/aYwTHKQ88GE2DQ6GkWSYFOI4lQ=
+github.com/ghostiam/protogetter v0.3.9/go.mod h1:WZ0nw9pfzsgxuRsPOFQomgDVSWtDLJRfQJEhsGbmQMA=
 github.com/go-chi/chi/v5 v5.2.0 h1:Aj1EtB0qR2Rdo2dG4O94RIU35w2lvQSj6BRA4+qwFL0=
 github.com/go-chi/chi/v5 v5.2.0/go.mod h1:DslCQbL2OYiznFReuXYUmQ2hGd1aDpCnlMNITLSKoi8=
 github.com/go-critic/go-critic v0.11.5 h1:TkDTOn5v7EEngMxu8KbuFqFR43USaaH8XRJLz1jhVYA=
@@ -729,6 +735,8 @@ github.com/pingcap/log v1.1.1-0.20230317032135-a0d097d16e22 h1:2SOzvGvE8beiC1Y4g
 github.com/pingcap/log v1.1.1-0.20230317032135-a0d097d16e22/go.mod h1:DWQW5jICDR7UJh4HtxXSM20Churx4CQL0fwL/SoOSA4=
 github.com/pingcap/tidb/pkg/parser v0.0.0-20241118164214-4f047be191be h1:t5EkCmZpxLCig5GQA0AZG47aqsuL5GTsJeeUD+Qfies=
 github.com/pingcap/tidb/pkg/parser v0.0.0-20241118164214-4f047be191be/go.mod h1:Hju1TEWZvrctQKbztTRwXH7rd41Yq0Pgmq4PrEKcq7o=
+github.com/pingcap/tidb/pkg/parser v0.0.0-20250108135927-8390fc4557d0 h1:XAnfZHLSgoiaYuY8WybAgnhDBDyBo7SjJequI739tMs=
+github.com/pingcap/tidb/pkg/parser v0.0.0-20250108135927-8390fc4557d0/go.mod h1:Hju1TEWZvrctQKbztTRwXH7rd41Yq0Pgmq4PrEKcq7o=
 github.com/piotrkowalczuk/promgrpc/v4 v4.1.4 h1:c0uCOlfeDBb0Mr1os7TY4g9RfPtaK4EEBo7kd9cICpU=
 github.com/piotrkowalczuk/promgrpc/v4 v4.1.4/go.mod h1:MGaZJU+KEuYk4UftJOYDhcOEy2cN0CmuaPw+ILFlweY=
 github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c h1:+mdjkGKdHQG3305AYmdv1U2eRNDiU2ErMBj1gwrq8eQ=
@@ -780,6 +788,8 @@ github.com/rivo/uniseg v0.4.7/go.mod h1:FN3SvrM+Zdj16jyLfmOkMNblXMcoc8DfTHruCPUc
 github.com/rogpeppe/go-internal v1.3.0/go.mod h1:M8bDsm7K2OlrFYOpmOWEs/qY81heoFRclV5y23lUDJ4=
 github.com/rogpeppe/go-internal v1.13.1 h1:KvO1DLK/DRN07sQ1LQKScxyZJuNnedQ5/wKSR38lUII=
 github.com/rogpeppe/go-internal v1.13.1/go.mod h1:uMEvuHeurkdAXX61udpOXGD/AzZDWNMNyH2VO9fmH0o=
+github.com/rogpeppe/go-internal v1.13.2-0.20241226121412-a5dc8ff20d0a h1:w3tdWGKbLGBPtR/8/oO74W6hmz0qE5q0z9aqSAewaaM=
+github.com/rogpeppe/go-internal v1.13.2-0.20241226121412-a5dc8ff20d0a/go.mod h1:S8kfXMp+yh77OxPD4fdM6YUknrZpQxLhvxzS4gDHENY=
 github.com/rs/cors v1.11.1 h1:eU3gRzXLRK57F5rKMGMZURNdIG4EoAmX8k94r9wXWHA=
 github.com/rs/cors v1.11.1/go.mod h1:XyqrcTp5zjWr1wsJ8PIRZssZ8b/WMcMf71DJnit4EMU=
 github.com/rs/xid v1.5.0/go.mod h1:trrq9SKmegXys3aeAKXMUTdJsYXVwGY3RLcfgqegfbg=
