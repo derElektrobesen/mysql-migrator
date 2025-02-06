@@ -13,6 +13,7 @@ cleanup=0
 trace=0
 do_migrate_schema=1
 tables_to_migrate=()
+skip_tables=()
 
 tmp_file=$(mktemp) # could be used to store error message
 trap "drop_tmp_file $tmp_file" EXIT
@@ -61,6 +62,10 @@ declare -A allowed_flags=(
 	["--tables,method"]=set_tables_to_migrate
 	["--tables,has_arg"]=1
 	["--tables,help"]="Comma-separated list of tables to migrate, (default: all)"
+
+	["--skip-tables,method"]=set_skip_tables
+	["--skip-tables,has_arg"]=1
+	["--skip-tables,help"]="Comma-separated list of tables to skip, (default: none)"
 )
 
 declare -A binaries
@@ -150,6 +155,10 @@ function set_schema_name() {
 
 function set_tables_to_migrate() {
 	tables_to_migrate=($(echo "$1" | tr ',' '\n'))
+}
+
+function set_skip_tables() {
+	skip_tables=($(echo "$1" | tr ',' '\n'))
 }
 
 function enable_trace() {
@@ -293,26 +302,22 @@ function drop_tmp_file() {
 
 function make_pgloader_tables_to_migrate_cmd() {
 	local tables_to_import_q=""
-	if [ ${#tables_to_migrate[@]} -gt 0 ]; then
-		tables_to_import_q="INCLUDING ONLY TABLE NAMES MATCHING"
+	tables_to_import_q="INCLUDING ONLY TABLE NAMES MATCHING"
 
-		local n=0
-		local tables=( $(list_source_tables) )
-		for t in "${tables[@]}"; do
-			n=$((n+1))
+	local n=0
+	local tables=( $(list_source_tables) )
+	for t in "${tables[@]}"; do
+		n=$((n+1))
 
-			local suffix=""
-			if [ $n -lt ${#tables[@]} ]; then
-				suffix=","
-			fi
+		local suffix=""
+		if [ $n -lt ${#tables[@]} ]; then
+			suffix=","
+		fi
 
-			tables_to_import_q="$tables_to_import_q '$t'$suffix"
-		done
+		tables_to_import_q="$tables_to_import_q '$t'$suffix"
+	done
 
-		tables_to_import_q=$(printf "$tables_to_import_q\n")
-	fi
-
-	echo "$tables_to_import_q"
+	printf "$tables_to_import_q\n"
 }
 
 function make_pgloader_rename_queries() {
@@ -623,7 +628,7 @@ function list_tables() {
 	call_psql "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = '${postgres_conf[schema_name]}'"
 }
 
-function list_source_tables() {
+function list_source_tables_wo_skip() {
 	# If there is a --tables option, function checks all tables in the list are present and
 	# returns this list in case-sensitive mode
 	#
@@ -649,6 +654,15 @@ function list_source_tables() {
 
 		echo "$res"
 	done
+}
+
+function list_source_tables() {
+	local res="$(list_source_tables_wo_skip)"
+	for t in "${skip_tables[@]}"; do
+		res="$(echo "$res" | grep -iv "$t")"
+	done
+
+	echo "$res"
 }
 
 function list_columns_in_source_table() {
