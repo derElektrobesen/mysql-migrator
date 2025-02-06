@@ -710,7 +710,7 @@ pipelines:
     connectors:
       - id: mysql-datasource
         type: source
-        plugin: "mysql" # https://github.com/conduitio-labs/conduit-connector-mysql
+        plugin: "builtin:mysql" # https://github.com/conduitio-labs/conduit-connector-mysql
         settings:
           dsn: "${mysql_conf[login]}:${mysql_conf[pass]}@tcp(${mysql_conf[host]}:${mysql_conf[port]})/${mysql_conf[db_name]}"
           tables: "$tables_list"
@@ -720,7 +720,7 @@ pipelines:
           #sdk.batch.delay: 100ms # TODO: https://github.com/ConduitIO/conduit-commons/issues/169
       - id: postgresql-destination
         type: destination
-        plugin: "postgres-hacked" # https://github.com/ConduitIO/conduit-connector-postgres
+        plugin: "builtin:postgres" # https://github.com/ConduitIO/conduit-connector-postgres
         settings:
           url: "postgresql://${postgres_conf[login]}:${postgres_conf[pass]}@${postgres_conf[host]}:${postgres_conf[port]}/${postgres_conf[db_name]}"
           table: "{{ index .Metadata \\"opencdc.collection\\" | printf \\"%q\\" }}"

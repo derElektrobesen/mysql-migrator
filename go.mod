@@ -3,6 +3,12 @@ module github.com/derElektroBesen/mysql-migrator
 go 1.23.5
 
 require (
+	github.com/conduitio/conduit v0.13.0
+	github.com/derElektroBesen/conduit-connector-mysql v0.0.0-20250205170907-e93f87c951c7
+	github.com/derElektroBesen/conduit-connector-postgres v0.0.0-20250205135131-a7f11f9ae143
+)
+
+require (
 	4d63.com/gocheckcompilerdirectives v1.2.1 // indirect
 	4d63.com/gochecknoglobals v0.2.1 // indirect
 	buf.build/gen/go/bufbuild/bufplugin/protocolbuffers/go v1.36.3-20241031151143-70f632351282.1 // indirect
@@ -83,7 +89,6 @@ require (
 	github.com/charithe/durationcheck v0.0.10 // indirect
 	github.com/chavacava/garif v0.1.0 // indirect
 	github.com/ckaznocha/intrange v0.3.0 // indirect
-	github.com/conduitio/conduit v0.13.0 // indirect
 	github.com/conduitio/conduit-commons v0.5.1 // indirect
 	github.com/conduitio/conduit-connector-file v0.10.0 // indirect
 	github.com/conduitio/conduit-connector-generator v0.10.0 // indirect
@@ -113,8 +118,6 @@ require (
 	github.com/daixiang0/gci v0.13.5 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/denis-tingaikin/go-header v0.5.0 // indirect
-	github.com/derElektroBesen/conduit-connector-mysql v0.0.0-20250205163214-33d86462ae31 // indirect
-	github.com/derElektroBesen/conduit-connector-postgres v0.0.0-20250205135131-a7f11f9ae143 // indirect
 	github.com/dgraph-io/badger/v4 v4.5.0 // indirect
 	github.com/dgraph-io/ristretto/v2 v2.0.0 // indirect
 	github.com/distribution/reference v0.6.0 // indirect

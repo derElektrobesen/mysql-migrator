@@ -1,0 +1,4 @@
+https://github.com/conduitio-labs/conduit-connector-mysql/pull/90
+https://github.com/conduitio-labs/conduit-connector-mysql/pull/79
+https://github.com/ConduitIO/conduit-commons/issues/169
+https://github.com/ConduitIO/conduit-connector-postgres/compare/main...derElektrobesen:conduit-connector-postgres:quoted-column-names
