@@ -4,7 +4,7 @@ go 1.23.5
 
 require (
 	github.com/conduitio/conduit v0.13.0
-	github.com/derElektroBesen/conduit-connector-mysql v0.0.0-20250206124204-7bd1425759d9
+	github.com/derElektroBesen/conduit-connector-mysql v0.0.0-20250206141817-a4f2933955d2
 	github.com/derElektroBesen/conduit-connector-postgres v0.0.0-20250206131348-bcda7ecd9950
 	gopkg.in/yaml.v2 v2.4.0
 )

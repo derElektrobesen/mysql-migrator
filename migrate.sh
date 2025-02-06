@@ -715,6 +715,7 @@ pipelines:
           dsn: "${mysql_conf[login]}:${mysql_conf[pass]}@tcp(${mysql_conf[host]}:${mysql_conf[port]})/${mysql_conf[db_name]}"
           tables: "$tables_list"
           fetchSize: 100000
+          mysql55Compatibility: true
 
           sdk.batch.size: 100000
           sdk.batch.delay: 100ms # TODO: https://github.com/ConduitIO/conduit-commons/issues/169
