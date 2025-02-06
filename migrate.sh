@@ -503,20 +503,30 @@ function create_dst_database_impl() {
 	call_psql "CREATE DATABASE $(q ${postgres_conf[db_name]})" "postgres" > /dev/null
 }
 
-function create_dst_database() {
+function check_dst_db_exists() {
 	local err_msg
 	local res
 	read res err_msg < <(call_psql_expect_error 'SELECT 1' 1)
 
 	if [ "$res" == "1" ]; then
 		# database already exists
-		info "database ${postgres_conf[db_name]} found in postgres, continue"
+		echo 1
 		return
 	fi
 
 	local x=$(echo "$err_msg" | grep "database "\""${postgres_conf[db_name]}"\"" does not exist")
 	if [ "$x" == "" ]; then
 		error "unknown error expected during postgres database verification: $err_msg"
+	fi
+
+	echo 0
+}
+
+function create_dst_database() {
+	if [ "$(check_dst_db_exists)" == "1" ]; then
+		# database already exists
+		info "database ${postgres_conf[db_name]} found in postgres, continue"
+		return
 	fi
 
 	info "database ${postgres_conf[db_name]} not found in postgres. $(magenta 'Create one')"
@@ -566,6 +576,11 @@ function migrate_schema() {
 }
 
 function cleanup_postgres() {
+	if [ "$(check_dst_db_exists)" == "0" ]; then
+		info "database ${postgres_conf[db_name]} not found in postgres, nothing to cleanup. Continue"
+		return
+	fi
+
 	warning "are you sure you want to cleanup postgres? ${postgres_conf[db_name]} database will be dropped"
 
 	local answer
@@ -692,11 +707,21 @@ schema-registry:
 EOM
 }
 
+function mysql_server_version() {
+	# 55 // 57 // 80 will be returned
+	call_mysql "SELECT version()" | awk -F. '{print $1$2}'
+}
+
 function setup_conduit_pipeline() {
 	local cfg_file="$1"
 	local pipeline_name="$(basename $cfg_file '.yaml')-pipeline"
 
 	local tables_list=$(list_tables | tr '\n' ',' | tr -d ' ' | perl -pe 's/,$//')
+
+	local mysql55Compatibility="false"
+	if [ $(mysql_server_version) -lt 57 ]; then
+		mysql55Compatibility="true"
+	fi
 
 	cat > $cfg_file <<- EOM
 version: "2.2"
@@ -712,7 +737,7 @@ pipelines:
           dsn: "${mysql_conf[login]}:${mysql_conf[pass]}@tcp(${mysql_conf[host]}:${mysql_conf[port]})/${mysql_conf[db_name]}"
           tables: "$tables_list"
           fetchSize: 100000
-          mysql55Compatibility: true
+          mysql55Compatibility: $mysql55Compatibility
 
           sdk.batch.size: 100000
           sdk.batch.delay: 100ms # TODO: https://github.com/ConduitIO/conduit-commons/issues/169
