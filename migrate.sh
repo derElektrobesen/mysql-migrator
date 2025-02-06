@@ -70,10 +70,7 @@ required_global_tools=(
 )
 required_local_tools=(
 	pgloader
-
 	conduit
-	conduit-connector-mysql
-	conduit-connector-postgres-hacked
 )
 
 ###########################################
@@ -828,9 +825,6 @@ function run_conduit() {
 	setup_conduit_pipeline "${conduit_conf[pipelines_dir]}/mysql-to-postgres-${mysql_conf[db_name]}.yaml"
 
 	stop_already_running_conduit ${conduit_conf[pid_file]}
-
-	modify "cp -f ${binaries[conduit-connector-mysql]} ${conduit_conf[connectors_dir]}"
-	modify "cp -f ${binaries[conduit-connector-postgres-hacked]} ${conduit_conf[connectors_dir]}"
 
 	local run_script="$w_dir/run_conduit.sh"
 	setup_conduit_run_script $run_script conduit_conf
