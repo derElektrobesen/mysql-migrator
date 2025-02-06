@@ -4,8 +4,9 @@ go 1.23.5
 
 require (
 	github.com/conduitio/conduit v0.13.0
-	github.com/derElektroBesen/conduit-connector-mysql v0.0.0-20250205170907-e93f87c951c7
-	github.com/derElektroBesen/conduit-connector-postgres v0.0.0-20250205135131-a7f11f9ae143
+	github.com/derElektroBesen/conduit-connector-mysql v0.0.0-20250206124204-7bd1425759d9
+	github.com/derElektroBesen/conduit-connector-postgres v0.0.0-20250206131348-bcda7ecd9950
+	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (
@@ -397,7 +398,6 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	honnef.co/go/tools v0.5.1 // indirect
 	modernc.org/gc/v3 v3.0.0-20240107210532-573471604cb6 // indirect

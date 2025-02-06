@@ -37,7 +37,7 @@ func main() {
 	// Add the HTTP connector to list of built-in
 	// connectors
 	cfg.ConnectorPlugins["mysql"] = mysql.Connector
-	cfg.ConnectorPlugins["postgres"] = postgres.Connector
+	cfg.ConnectorPlugins["psql"] = postgres.Connector
 
 	e := &conduit.Entrypoint{}
 	e.Serve(cfg)

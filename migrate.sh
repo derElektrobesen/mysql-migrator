@@ -717,16 +717,15 @@ pipelines:
           fetchSize: 100000
 
           sdk.batch.size: 100000
-          #sdk.batch.delay: 100ms # TODO: https://github.com/ConduitIO/conduit-commons/issues/169
+          sdk.batch.delay: 100ms # TODO: https://github.com/ConduitIO/conduit-commons/issues/169
       - id: postgresql-destination
         type: destination
-        plugin: "builtin:postgres" # https://github.com/ConduitIO/conduit-connector-postgres
+        plugin: "builtin:psql" # https://github.com/ConduitIO/conduit-connector-postgres
         settings:
           url: "postgresql://${postgres_conf[login]}:${postgres_conf[pass]}@${postgres_conf[host]}:${postgres_conf[port]}/${postgres_conf[db_name]}"
-          table: "{{ index .Metadata \\"opencdc.collection\\" | printf \\"%q\\" }}"
 
           sdk.batch.size: 100000
-          #sdk.batch.delay: 100ms # TODO: https://github.com/ConduitIO/conduit-commons/issues/169
+          sdk.batch.delay: 100ms
 EOM
 }
 
