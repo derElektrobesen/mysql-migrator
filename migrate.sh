@@ -301,23 +301,12 @@ function drop_tmp_file() {
 ###########################################
 
 function make_pgloader_tables_to_migrate_cmd() {
-	local tables_to_import_q=""
-	tables_to_import_q="INCLUDING ONLY TABLE NAMES MATCHING"
-
-	local n=0
 	local tables=( $(list_source_tables) )
-	for t in "${tables[@]}"; do
-		n=$((n+1))
 
-		local suffix=""
-		if [ $n -lt ${#tables[@]} ]; then
-			suffix=","
-		fi
+	function mapper() { echo "'$1'"; }
+	map mapper tables
 
-		tables_to_import_q="$tables_to_import_q '$t'$suffix"
-	done
-
-	printf "$tables_to_import_q\n"
+	printf "INCLUDING ONLY TABLE NAMES MATCHING $(join ", " tables)\n"
 }
 
 function make_pgloader_rename_queries() {
@@ -351,25 +340,9 @@ function make_pgloader_after_queries() {
 		make_pgloader_rename_queries "$t" after_queries
 	done
 
-	local after_load_do=""
-	if [ ${#after_queries[@]} -ne 0 ]; then
-		after_load_do="AFTER LOAD DO"
-
-		local n=0
-		for q in "${after_queries[@]}"; do
-			n=$((n+1))
-
-			local suffix=""
-			if [ $n -lt ${#after_queries[@]} ]; then
-				suffix=","
-			fi
-
-			after_load_do=$(printf "$after_load_do\n        \$\$%s\$\$%s" "$q" "$suffix")
-		done
-
-	fi
-
-	echo "$after_load_do"
+	function mapper() { printf '        $$%s$$' "$1"; }
+	map mapper after_queries
+	printf "AFTER LOAD DO\n$(join $',\n' after_queries)"
 }
 
 function make_pgloader_script() {
@@ -621,13 +594,6 @@ function disable_indexes_impl() {
 	toggle_indexes "$1" "DISABLE"
 }
 
-function list_tables() {
-	# Function returns a list of all tables in Postgres DB.
-	# XXX: List could contain not migrated tables
-	# TODO: check database is empty before migration
-	call_psql "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = '${postgres_conf[schema_name]}'"
-}
-
 function list_source_tables_wo_skip() {
 	# If there is a --tables option, function checks all tables in the list are present and
 	# returns this list in case-sensitive mode
@@ -657,12 +623,78 @@ function list_source_tables_wo_skip() {
 }
 
 function list_source_tables() {
-	local res="$(list_source_tables_wo_skip)"
+	local res="$(list_source_tables_wo_skip | sort)"
 	for t in "${skip_tables[@]}"; do
 		res="$(echo "$res" | grep -iv "$t")"
 	done
 
 	echo "$res"
+}
+
+function list_source_table_indexes() {
+	# Function lists all indexes in the table passed
+	# and returns a map column_key -> index type
+	local table_name="$1"
+	local -n res_ref="$2"
+
+	local res="$(call_mysql "SELECT COLUMN_NAME, COLUMN_KEY FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='$1' AND TABLE_SCHEMA='${mysql_conf[db_name]}'")"
+
+	IFS=$'\n' read -rd '' -a rows <<<"$res" # split lines into array
+
+	res_ref[primary_key]=""
+
+	local unique_indexed_cols=()
+	local nonunique_indexed_cols=()
+	for row in "${rows[@]}"; do
+		local colname=$(echo "$row" | awk '{print $1}')
+		local idx=$(echo "$row" | awk '{print $2}')
+
+		if [ "$idx" != "" ]; then
+			case "$idx" in
+				"PRI") res_ref[primary_key]="$colname";; # only one primary key could be on table
+				"UNI") unique_indexed_cols+=( "$colname" );;
+				"MUL") nonunique_indexed_cols+=( "$colname" );;
+			esac
+		fi
+	done
+
+	res_ref[unique_key]="$(join "," unique_indexed_cols)"
+	res_ref[non_unique_key]="$(join "," nonunique_indexed_cols)"
+}
+
+function setup_sorting_columns() {
+	local -n map_ref="$1"
+
+	for t in $(list_source_tables); do
+		declare -A indexes
+		list_source_table_indexes "$t" indexes
+
+		if [ "${indexes[primary_key]}" != "" ]; then
+			map_ref[$t]="${indexes[primary_key]}"
+			continue
+		fi
+
+		local unique_indexed_cols=( $(echo "${indexes[unique_key]}" | tr ',' '\n') )
+		if [ ${#unique_indexed_cols[@]} -gt 0 ]; then
+			local idx_col=${unique_indexed_cols[0]}
+			warning "no primary key found in table $t; ${#unique_indexed_cols[@]} unique indexes found; " \
+				"use unique $idx_col column to sort rows in table $t"
+			map_ref[$t]="$idx_col"
+			continue
+		fi
+
+		local non_unique_indexed_cols=( $(echo "${indexes[non_unique_key]}" | tr ',' '\n') )
+		if [ ${#non_unique_indexed_cols[@]} -gt 0 ]; then
+			local idx_col=${non_unique_indexed_cols[0]}
+			warning "no primary key found in table $t; 0 unique indexes found; " \
+				"${#non_unique_indexed_cols[@]} non-unique indexes found; " \
+				"use $(magenta "not unique") $idx_col column to sort rows in table $t"
+			map_ref[$t]="$idx_col"
+			continue
+		fi
+
+		error "no indexes found in table $(magenta $t): migration is not possible. Use --skip-tables arg to skip this table"
+	done
 }
 
 function list_columns_in_source_table() {
@@ -671,7 +703,7 @@ function list_columns_in_source_table() {
 }
 
 function disable_indexes() {
-	local res=$(list_tables)
+	local res=$(list_source_tables)
 
 	if [ "$res" == "" ]; then
 		error "unable to select table names: no tables found"
@@ -726,11 +758,23 @@ function mysql_server_version() {
 	call_mysql "SELECT version()" | awk -F. '{print $1$2}'
 }
 
+function setup_cfg_sorting_columns() {
+	declare -A sorting_columns=()
+	setup_sorting_columns sorting_columns
+
+	local arr=()
+	for k in "${!sorting_columns[@]}"; do
+		arr+=("          tableConfig.$k.sortingColumn: $(q "${sorting_columns[$k]}")")
+	done
+
+	join $',\n' arr
+}
+
 function setup_conduit_pipeline() {
 	local cfg_file="$1"
 	local pipeline_name="$(basename $cfg_file '.yaml')-pipeline"
 
-	local tables_list=$(list_tables | tr '\n' ',' | tr -d ' ' | perl -pe 's/,$//')
+	local tables_list=$(list_source_tables | tr '\n' ',' | tr -d ' ' | perl -pe 's/,$//')
 
 	local mysql55Compatibility="false"
 	if [ $(mysql_server_version) -lt 57 ]; then
@@ -752,6 +796,8 @@ pipelines:
           tables: "$tables_list"
           fetchSize: 100000
           mysql55Compatibility: $mysql55Compatibility
+
+$(setup_cfg_sorting_columns)
 
           sdk.batch.size: 100000
           sdk.batch.delay: 100ms # TODO: https://github.com/ConduitIO/conduit-commons/issues/169
@@ -911,6 +957,46 @@ function q() {
 	echo ""\""$1"\"""
 }
 
+function map() {
+	# Function calls cmd on each array element
+	# Returns new array
+	# Usage:
+	#   function mapper() { echo ">$1<"; }
+	#   map mapper arr # arr will contain new array
+
+	local cmd="$1"
+	local -n array_ref="$2"
+
+	for i in "${!array_ref[@]}"; do
+		array_ref[$i]="$($cmd "${array_ref[$i]}")"
+	done
+}
+
+function join() {
+	# Function joins an array into a string using delimiter
+	# Delimiter could contain multiple symbols (\n also)
+	# Usage:
+	#   join "delim" arr
+	# XXX: use $'\n' notation to include \n in delim
+
+	local delim="$1"
+	local -n array_ref="$2"
+
+	local res=""
+
+	for i in "${!array_ref[@]}"; do
+		local suffix="$delim"
+
+		local arr_len=${#array_ref[@]}
+		if [ $i -eq $(( arr_len-1 )) ]; then
+			suffix=""
+		fi
+
+		res="$res${array_ref[$i]}$suffix"
+	done
+	printf "$res"
+}
+
 #{{{ Colors
 function red() {
 	echo -e "\e[1;31m$@\e[0m"
@@ -951,7 +1037,8 @@ function error() {
 	# $ x=$(exit)
 	# $ echo $?
 	# > 0
-	kill -s TERM -$PID
+	kill -s TERM $PID
+	exit 1
 }
 
 function message() {
