@@ -559,7 +559,7 @@ function cleanup_postgres() {
 		return
 	fi
 
-	warning "are you sure you want to cleanup postgres? ${postgres_conf[db_name]} database will be dropped"
+	warning "are you sure you want to cleanup Postgres? ${postgres_conf[db_name]} database will be $(red dropped)"
 
 	local answer
 	read -p "Type 'yes' to continue: " answer
@@ -574,7 +574,7 @@ function cleanup_postgres() {
 		error "unable to drop database ${postgres_conf[db_name]}: $err_msg"
 	fi
 
-	info "database ${postgres_conf[db_name]} $(red dropped)"
+	info "database ${postgres_conf[db_name]} $(red dropped) in Postgres"
 }
 
 function run_cleanup() {
@@ -753,11 +753,6 @@ schema-registry:
 EOM
 }
 
-function mysql_server_version() {
-	# 55 // 57 // 80 will be returned
-	call_mysql "SELECT version()" | awk -F. '{print $1$2}'
-}
-
 function setup_cfg_sorting_columns() {
 	declare -A sorting_columns=()
 	setup_sorting_columns sorting_columns
@@ -776,11 +771,6 @@ function setup_conduit_pipeline() {
 
 	local tables_list=$(list_source_tables | tr '\n' ',' | tr -d ' ' | perl -pe 's/,$//')
 
-	local mysql55Compatibility="false"
-	if [ $(mysql_server_version) -lt 57 ]; then
-		mysql55Compatibility="true"
-	fi
-
 	cat > $cfg_file <<- EOM
 version: "2.2"
 pipelines:
@@ -795,7 +785,6 @@ pipelines:
           dsn: "${mysql_conf[login]}:${mysql_conf[pass]}@tcp(${mysql_conf[host]}:${mysql_conf[port]})/${mysql_conf[db_name]}"
           tables: "$tables_list"
           fetchSize: 100000
-          mysql55Compatibility: $mysql55Compatibility
 
 $(setup_cfg_sorting_columns)
 

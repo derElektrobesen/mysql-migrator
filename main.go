@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 
+	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/conduitio/conduit/pkg/conduit"
 	mysql "github.com/derElektroBesen/conduit-connector-mysql"
 	postgres "github.com/derElektroBesen/conduit-connector-postgres"
@@ -24,6 +25,22 @@ func readYAMLConfig(filename string, dest *conduit.Config) error {
 	return nil
 }
 
+func newPSQLConnector(name string) sdk.Connector {
+	c := postgres.Connector
+
+	newSpec := c.NewSpecification
+	c.NewSpecification = func() sdk.Specification {
+		// renaming is required to prevent conflicts
+		// with native postgresql plugin
+		spec := newSpec()
+		spec.Name = name
+
+		return spec
+	}
+
+	return c
+}
+
 func main() {
 	// Get the default configuration, including all built-in
 	// connectors
@@ -37,7 +54,9 @@ func main() {
 	// Add the HTTP connector to list of built-in
 	// connectors
 	cfg.ConnectorPlugins["mysql"] = mysql.Connector
-	cfg.ConnectorPlugins["psql"] = postgres.Connector
+
+	const psqlConnectorName = "psql"
+	cfg.ConnectorPlugins[psqlConnectorName] = newPSQLConnector(psqlConnectorName)
 
 	e := &conduit.Entrypoint{}
 	e.Serve(cfg)

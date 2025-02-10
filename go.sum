@@ -293,8 +293,8 @@ github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/denis-tingaikin/go-header v0.5.0 h1:SRdnP5ZKvcO9KKRP1KJrhFR3RrlGuD+42t4429eC9k8=
 github.com/denis-tingaikin/go-header v0.5.0/go.mod h1:mMenU5bWrok6Wl2UsZjy+1okegmwQ3UgWl4V1D8gjlY=
-github.com/derElektroBesen/conduit-connector-mysql v0.0.0-20250210095423-25fabeb4a98b h1:urQ4NKvgQjiIMGiA+qIQ224UeSxxA0PN4ehci1STrQ0=
-github.com/derElektroBesen/conduit-connector-mysql v0.0.0-20250210095423-25fabeb4a98b/go.mod h1:yZdyPdmzHQKFTORHd3f1iSG1q1KFxKtwVSpzO+nzv60=
+github.com/derElektroBesen/conduit-connector-mysql v0.0.0-20250210115328-815684ab32d4 h1:T5jDmb6/WG3DDQctIgMZUM+XrhUM7Vrob0vLSuEj7R8=
+github.com/derElektroBesen/conduit-connector-mysql v0.0.0-20250210115328-815684ab32d4/go.mod h1:yZdyPdmzHQKFTORHd3f1iSG1q1KFxKtwVSpzO+nzv60=
 github.com/derElektroBesen/conduit-connector-postgres v0.0.0-20250210095202-828fc96e8fe0 h1:ifPRA0Tjva1StBQoqInoeliNyZFnDJ6z00XeYyjiKYw=
 github.com/derElektroBesen/conduit-connector-postgres v0.0.0-20250210095202-828fc96e8fe0/go.mod h1:l0Q2iL0jNpfwIjjc4lgKDilCyxwS28qpT91TSW/3rpY=
 github.com/dgraph-io/badger/v4 v4.5.0 h1:TeJE3I1pIWLBjYhIYCA1+uxrjWEoJXImFBMEBVSm16g=

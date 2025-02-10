@@ -4,7 +4,8 @@ go 1.23.5
 
 require (
 	github.com/conduitio/conduit v0.13.0
-	github.com/derElektroBesen/conduit-connector-mysql v0.0.0-20250210095423-25fabeb4a98b
+	github.com/conduitio/conduit-connector-sdk v0.13.2-0.20250207182528-736aac3f2681
+	github.com/derElektroBesen/conduit-connector-mysql v0.0.0-20250210115328-815684ab32d4
 	github.com/derElektroBesen/conduit-connector-postgres v0.0.0-20250210095202-828fc96e8fe0
 	gopkg.in/yaml.v2 v2.4.0
 )
@@ -98,7 +99,6 @@ require (
 	github.com/conduitio/conduit-connector-postgres v0.11.0 // indirect
 	github.com/conduitio/conduit-connector-protocol v0.9.1 // indirect
 	github.com/conduitio/conduit-connector-s3 v0.9.0 // indirect
-	github.com/conduitio/conduit-connector-sdk v0.13.2-0.20250207182528-736aac3f2681 // indirect
 	github.com/conduitio/conduit-processor-sdk v0.4.1 // indirect
 	github.com/conduitio/conduit-schema-registry v0.2.2 // indirect
 	github.com/conduitio/evolviconf v0.1.0 // indirect
