@@ -638,7 +638,6 @@ function list_source_table_indexes() {
 	local -n res_ref="$2"
 
 	local res="$(call_mysql "SELECT COLUMN_NAME, COLUMN_KEY FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='$1' AND TABLE_SCHEMA='${mysql_conf[db_name]}'")"
-
 	IFS=$'\n' read -rd '' -a rows <<<"$res" # split lines into array
 
 	res_ref[primary_key]=""
@@ -713,6 +712,56 @@ function disable_indexes() {
 		info "disable indexes on table $t"
 		modify "disable_indexes_impl '$t'"
 	done
+}
+
+function list_dest_columns_types() {
+	local table_name="$1"
+	local -n dest_ref="$2"
+
+	local res="$(call_psql "SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = '${postgres_conf[schema_name]}' AND table_name = '$table_name'")"
+	IFS=$'\n' read -rd '' -a rows <<<"$res" # split lines into array
+
+	for row in "${rows[@]}"; do
+		local col_name=$(echo "$row" | awk -F'|' '{print $1}' | tr -d '[:space:]')
+		local col_type=$(echo "$row" | awk -F'|' '{print $2}' | tr -d '[:space:]')
+
+		dest_ref[$col_name]="$col_type"
+	done
+}
+
+function list_boolean_columns() {
+	local table_name="$1"
+
+	declare -A columns=()
+	list_dest_columns_types "$table_name" columns
+	for col_name in "${!columns[@]}"; do
+		if [ "${columns[$col_name]}" == "boolean" ]; then
+			echo "$col_name"
+		fi
+	done
+}
+
+function make_processors_config() {
+	local lines=()
+
+	for t in $(list_source_tables); do
+		for col in $(list_boolean_columns "$t"); do
+			lines+=( \
+				"- id: $t-field-$col-converting"
+				"  plugin: $(q "field.convert") # https://conduit.io/docs/using/processors/builtin/field.convert"
+				"  settings:"
+				"    field: $(q ".Payload.After.$col")"
+				"    type: $(q "bool")"
+				"  condition: '{{ eq (index .Metadata $(q "opencdc.collection")) $(q $t) }}' # https://conduit.io/docs/using/processors/conditions"
+				""
+			)
+		done
+	done
+
+	function mapper() { [[ "$1" == "" ]] && echo || echo "      $1"; }
+	map mapper lines
+
+	join $'\n' lines
 }
 
 function setup_base_conduit_config() {
@@ -790,6 +839,7 @@ $(setup_cfg_sorting_columns)
 
           sdk.batch.size: 100000
           sdk.batch.delay: 100ms # TODO: https://github.com/ConduitIO/conduit-commons/issues/169
+
       - id: postgresql-destination
         type: destination
         plugin: "builtin:psql" # https://github.com/ConduitIO/conduit-connector-postgres
@@ -798,6 +848,9 @@ $(setup_cfg_sorting_columns)
 
           sdk.batch.size: 100000
           sdk.batch.delay: 100ms
+
+    processors:
+$(make_processors_config)
 EOM
 }
 
