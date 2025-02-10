@@ -613,7 +613,7 @@ function list_source_tables_wo_skip() {
 	fi
 
 	for t in "${tables_to_migrate[@]}"; do
-		local res=$(echo "$tables" | grep -iw "$t")
+		local res=$(echo "$tables" | grep -ix "$t")
 		if [ "$res" == "" ]; then
 			error "table '$t' not found in mysql database"
 		fi
@@ -625,7 +625,7 @@ function list_source_tables_wo_skip() {
 function list_source_tables() {
 	local res="$(list_source_tables_wo_skip | sort)"
 	for t in "${skip_tables[@]}"; do
-		res="$(echo "$res" | grep -iv "$t")"
+		res="$(echo "$res" | grep -ivx "$t")"
 	done
 
 	echo "$res"
@@ -806,12 +806,12 @@ function setup_cfg_sorting_columns() {
 	declare -A sorting_columns=()
 	setup_sorting_columns sorting_columns
 
-	local arr=()
+	local lines=()
 	for k in "${!sorting_columns[@]}"; do
-		arr+=("          tableConfig.$k.sortingColumn: $(q "${sorting_columns[$k]}")")
+		lines+=( "          tableConfig.$k.sortingColumn: $(q "${sorting_columns[$k]}")" )
 	done
 
-	join $'\n' arr
+	join $'\n' lines
 }
 
 function setup_conduit_pipeline() {
