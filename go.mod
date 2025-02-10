@@ -4,8 +4,8 @@ go 1.23.5
 
 require (
 	github.com/conduitio/conduit v0.13.0
-	github.com/derElektroBesen/conduit-connector-mysql v0.0.0-20250206141817-a4f2933955d2
-	github.com/derElektroBesen/conduit-connector-postgres v0.0.0-20250206131348-bcda7ecd9950
+	github.com/derElektroBesen/conduit-connector-mysql v0.0.0-20250210095423-25fabeb4a98b
+	github.com/derElektroBesen/conduit-connector-postgres v0.0.0-20250210095202-828fc96e8fe0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -98,7 +98,7 @@ require (
 	github.com/conduitio/conduit-connector-postgres v0.11.0 // indirect
 	github.com/conduitio/conduit-connector-protocol v0.9.1 // indirect
 	github.com/conduitio/conduit-connector-s3 v0.9.0 // indirect
-	github.com/conduitio/conduit-connector-sdk v0.13.1 // indirect
+	github.com/conduitio/conduit-connector-sdk v0.13.2-0.20250207182528-736aac3f2681 // indirect
 	github.com/conduitio/conduit-processor-sdk v0.4.1 // indirect
 	github.com/conduitio/conduit-schema-registry v0.2.2 // indirect
 	github.com/conduitio/evolviconf v0.1.0 // indirect
@@ -383,11 +383,11 @@ require (
 	golang.org/x/exp/typeparams v0.0.0-20241108190413-2d47ceb2692f // indirect
 	golang.org/x/mod v0.22.0 // indirect
 	golang.org/x/net v0.34.0 // indirect
-	golang.org/x/sync v0.10.0 // indirect
+	golang.org/x/sync v0.11.0 // indirect
 	golang.org/x/sys v0.29.0 // indirect
 	golang.org/x/term v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
-	golang.org/x/time v0.9.0 // indirect
+	golang.org/x/time v0.10.0 // indirect
 	golang.org/x/tools v0.29.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250115164207-1a7da9e5054f // indirect
