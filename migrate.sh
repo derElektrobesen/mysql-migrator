@@ -330,7 +330,7 @@ function make_pgloader_rename_queries() {
 function make_pgloader_after_queries() {
 	local prev_schema_name=$(echo "${mysql_conf[db_name]}" | perl -ne 'print lc') # pgloader migrates without case respect
 
-	local after_queries=()
+	local after_queries=( "SELECT 1" ) # need to ignore case when there is no after queries required at all
 	if [ "$prev_schema_name" != "${postgres_conf[schema_name]}" ]; then
 		after_queries+=("ALTER SCHEMA $(q $prev_schema_name) RENAME TO $(q ${postgres_conf[schema_name]})")
 		after_queries+=("ALTER DATABASE $(q ${postgres_conf[db_name]}) SET search_path = $(q ${postgres_conf[schema_name]}), public")
