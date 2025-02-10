@@ -762,7 +762,7 @@ function setup_cfg_sorting_columns() {
 		arr+=("          tableConfig.$k.sortingColumn: $(q "${sorting_columns[$k]}")")
 	done
 
-	join $',\n' arr
+	join $'\n' arr
 }
 
 function setup_conduit_pipeline() {
