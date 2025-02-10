@@ -7,8 +7,10 @@ import (
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/conduitio/conduit/pkg/conduit"
+	proc_builtin "github.com/conduitio/conduit/pkg/plugin/processor/builtin"
 	mysql "github.com/derElektroBesen/conduit-connector-mysql"
 	postgres "github.com/derElektroBesen/conduit-connector-postgres"
+	"github.com/derElektroBesen/mysql-migrator/processor"
 	"gopkg.in/yaml.v2"
 )
 
@@ -57,6 +59,8 @@ func main() {
 
 	const psqlConnectorName = "psql"
 	cfg.ConnectorPlugins[psqlConnectorName] = newPSQLConnector(psqlConnectorName)
+
+	proc_builtin.DefaultBuiltinProcessors["test"] = processor.NewMigrationProcessor
 
 	e := &conduit.Entrypoint{}
 	e.Serve(cfg)

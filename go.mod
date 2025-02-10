@@ -4,10 +4,14 @@ go 1.23.5
 
 require (
 	github.com/conduitio/conduit v0.13.0
+	github.com/conduitio/conduit-commons v0.5.1
 	github.com/conduitio/conduit-connector-sdk v0.13.2-0.20250207182528-736aac3f2681
+	github.com/conduitio/conduit-processor-sdk v0.4.1
+	github.com/daixiang0/gci v0.13.5
 	github.com/derElektroBesen/conduit-connector-mysql v0.0.0-20250210115328-815684ab32d4
 	github.com/derElektroBesen/conduit-connector-postgres v0.0.0-20250210095202-828fc96e8fe0
 	gopkg.in/yaml.v2 v2.4.0
+	mvdan.cc/gofumpt v0.7.0
 )
 
 require (
@@ -91,7 +95,6 @@ require (
 	github.com/charithe/durationcheck v0.0.10 // indirect
 	github.com/chavacava/garif v0.1.0 // indirect
 	github.com/ckaznocha/intrange v0.3.0 // indirect
-	github.com/conduitio/conduit-commons v0.5.1 // indirect
 	github.com/conduitio/conduit-connector-file v0.10.0 // indirect
 	github.com/conduitio/conduit-connector-generator v0.10.0 // indirect
 	github.com/conduitio/conduit-connector-kafka v0.12.0 // indirect
@@ -99,7 +102,6 @@ require (
 	github.com/conduitio/conduit-connector-postgres v0.11.0 // indirect
 	github.com/conduitio/conduit-connector-protocol v0.9.1 // indirect
 	github.com/conduitio/conduit-connector-s3 v0.9.0 // indirect
-	github.com/conduitio/conduit-processor-sdk v0.4.1 // indirect
 	github.com/conduitio/conduit-schema-registry v0.2.2 // indirect
 	github.com/conduitio/evolviconf v0.1.0 // indirect
 	github.com/conduitio/evolviconf/evolviyaml v0.1.0 // indirect
@@ -116,7 +118,6 @@ require (
 	github.com/containerd/typeurl/v2 v2.2.3 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
 	github.com/curioswitch/go-reassign v0.3.0 // indirect
-	github.com/daixiang0/gci v0.13.5 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/denis-tingaikin/go-header v0.5.0 // indirect
 	github.com/dgraph-io/badger/v4 v4.5.0 // indirect
@@ -407,7 +408,6 @@ require (
 	modernc.org/sqlite v1.34.4 // indirect
 	modernc.org/strutil v1.2.0 // indirect
 	modernc.org/token v1.1.0 // indirect
-	mvdan.cc/gofumpt v0.7.0 // indirect
 	mvdan.cc/unparam v0.0.0-20240528143540-8a5130ca722f // indirect
 	pluginrpc.com/pluginrpc v0.5.0 // indirect
 )
