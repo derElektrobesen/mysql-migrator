@@ -729,9 +729,9 @@ function list_dest_columns_types() {
 	IFS=$'\n' read -rd '' -a rows <<<"$res" # split lines into array
 
 	for row in "${rows[@]}"; do
-		local col_name=$(echo "$row" | awk -F'|' '{print $1}' | tr -d '[:space:]')
-		local col_type=$(echo "$row" | awk -F'|' '{print $2}' | tr -d '[:space:]')
-		local underlying_type=$(echo "$row" | awk -F'|' '{print $3}' | tr -d '[:space:]')
+		local col_name=$(echo "$row" | awk -F'|' '{print $1}' | perl -pe 's/^\s*|\s*$//g')
+		local col_type=$(echo "$row" | awk -F'|' '{print $2}' | perl -pe 's/^\s*|\s*$//g')
+		local underlying_type=$(echo "$row" | awk -F'|' '{print $3}' | perl -pe 's/^\s*|\s*$//g')
 
 		dest_ref["$col_name,base_type"]="$col_type"
 		dest_ref["$col_name,underlying_type"]="$underlying_type"
@@ -753,10 +753,10 @@ function make_trace_log_processor() {
 		"    script: |"
 		"      function process(rec) {"
 		"        logger.Trace()."
-		"          Any($(q "record"), rec)."
-		"          Str($(q "source"), $(q "trace-logger"))."
-		"          Str($(q "kind"), $(q "$kind"))."
-		"          Msg($(q "got record"));"
+		"          Any('record', rec)."
+		"          Str('source', 'trace-logger')."
+		"          Str('kind', '$kind')."
+		"          Msg('got record');"
 		"        return rec;"
 		"      }"
 		""
@@ -792,18 +792,19 @@ function make_set_converter_processor() {
 		"  settings:"
 		"    script: |"
 		"      function process(rec) {"
-		"        let field_val = rec.Payload.After[$(q "$column_name")];"
+		"        let field_val = rec.Payload.After['$column_name'];"
 		"        if (typeof field_val !== 'string') {"
 		"          return rec;"
 		"        }"
 		""
 		"        if (field_val === '') {"
-		"          field_val = undefined;"
+		"          field_val = undefined; // set is empty"
 		"        } else {"
+		"          // create postgressql array from set"
 		"          field_val = '{' + field_val.split(',').map((x) => JSON.stringify(x)).join(',') + '}';"
 		"        }"
 		""
-		"        rec.Payload.After[$(q "$column_name")] = field_val;"
+		"        rec.Payload.After['$column_name'] = field_val;"
 		"        return rec;"
 		"      }"
 		"  condition: '{{ eq (index .Metadata $(q "opencdc.collection")) $(q $table_name) }}' # https://conduit.io/docs/using/processors/conditions"
@@ -824,6 +825,27 @@ function make_array_converter_processor() {
 	fi
 }
 
+function make_timestamp_converter_processor() {
+	local table_name="$1"
+	local column_name="$2"
+	local -n lines_ref="$3"
+
+	lines_ref+=( \
+		"- id: '$table_name-$column_name-timestamp-converter'"
+		"  plugin: 'custom.javascript'"
+		"  settings:"
+		"    script: |"
+		"      function process(rec) {"
+		"        if (rec.Payload.After['$column_name'] === '0001-01-01T00:00:00Z') {"
+		"          rec.Payload.After['$column_name'] = undefined; // Store zero-time as NULL"
+		"        }"
+		"        return rec;"
+		"      }"
+		"  condition: '{{ eq (index .Metadata $(q "opencdc.collection")) $(q $table_name) }}'"
+		""
+	)
+}
+
 function make_processors_config() {
 	local lines=()
 
@@ -840,6 +862,7 @@ function make_processors_config() {
 			case "${columns_types["$col,base_type"]}" in
 				"boolean") make_boolean_converter_processor "$t" "$col" lines ;;
 				"ARRAY") make_array_converter_processor "$t" "$col" "${columns_types["$col,underlying_type"]}" lines ;;
+				"timestamp with time zone") make_timestamp_converter_processor "$t" "$col" lines ;;
 			esac
 		done
 	done
