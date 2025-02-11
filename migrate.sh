@@ -601,9 +601,9 @@ function list_source_tables_wo_skip() {
 	# If --tables option is not present, returns all tables in database
 
 	local tables=$(call_mysql "$(\
-		echo "SELECT table_name FROM " \
-			"INFORMATION_SCHEMA.TABLES " \
-			"WHERE TABLE_TYPE = 'BASE TABLE' " \
+		echo "SELECT table_name FROM" \
+			"INFORMATION_SCHEMA.TABLES" \
+			"WHERE TABLE_TYPE = 'BASE TABLE'" \
 			"AND TABLE_SCHEMA = '${mysql_conf[db_name]}'" \
 		)")
 
@@ -709,7 +709,7 @@ function disable_indexes() {
 	fi
 
 	for t in $(echo "$res"); do
-		info "disable indexes on table $t"
+		trace "disable indexes on table $t"
 		modify "disable_indexes_impl '$t'"
 	done
 }
@@ -718,45 +718,134 @@ function list_dest_columns_types() {
 	local table_name="$1"
 	local -n dest_ref="$2"
 
-	local res="$(call_psql "SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = '${postgres_conf[schema_name]}' AND table_name = '$table_name'")"
+	local res="$(call_psql \
+		"$(echo "SELECT" \
+			"column_name, data_type, udt_name" \
+			"FROM information_schema.columns" \
+			"WHERE table_schema = '${postgres_conf[schema_name]}' AND table_name = '$table_name'" \
+		)" \
+	)"
+
 	IFS=$'\n' read -rd '' -a rows <<<"$res" # split lines into array
 
 	for row in "${rows[@]}"; do
 		local col_name=$(echo "$row" | awk -F'|' '{print $1}' | tr -d '[:space:]')
 		local col_type=$(echo "$row" | awk -F'|' '{print $2}' | tr -d '[:space:]')
+		local underlying_type=$(echo "$row" | awk -F'|' '{print $3}' | tr -d '[:space:]')
 
-		dest_ref[$col_name]="$col_type"
+		dest_ref["$col_name,base_type"]="$col_type"
+		dest_ref["$col_name,underlying_type"]="$underlying_type"
 	done
 }
 
-function list_boolean_columns() {
-	local table_name="$1"
+function make_trace_log_processor() {
+	if [ $trace -ne 1 ]; then
+		return
+	fi
 
-	declare -A columns=()
-	list_dest_columns_types "$table_name" columns
-	for col_name in "${!columns[@]}"; do
-		if [ "${columns[$col_name]}" == "boolean" ]; then
-			echo "$col_name"
-		fi
-	done
+	local kind="$1"
+	local -n lines_ref="$2"
+
+	lines_ref+=( \
+		"- id: 'trace-logger-$kind'"
+		"  plugin: 'custom.javascript'"
+		"  settings:"
+		"    script: |"
+		"      function process(rec) {"
+		"        logger.Trace()."
+		"          Any($(q "record"), rec)."
+		"          Str($(q "source"), $(q "trace-logger"))."
+		"          Str($(q "kind"), $(q "$kind"))."
+		"          Msg($(q "got record"));"
+		"        return rec;"
+		"      }"
+		""
+	)
+}
+
+function make_boolean_converter_processor() {
+	local table_name="$1"
+	local column_name="$2"
+	local -n lines_ref="$3"
+
+	lines_ref+=( \
+		"- id: '$table_name-$column_name-boolean-converter'"
+		"  plugin: 'field.convert' # https://conduit.io/docs/using/processors/builtin/field.convert"
+		"  settings:"
+		"    field: 'Payload.After.$column_name'"
+		"    type: 'bool'"
+		"  condition: '{{ eq (index .Metadata $(q "opencdc.collection")) $(q $table_name) }}' # https://conduit.io/docs/using/processors/conditions"
+		""
+	)
+}
+
+function make_set_converter_processor() {
+	local table_name="$1"
+	local column_name="$2"
+	local -n l_ref="$3" # lines_ref name is already exists
+
+	# This processor could be written on Go, javascript could be too slow
+	# But set datattype is not used very often and easier to implement it on JS
+	l_ref+=( \
+		"- id: '$table_name-$column_name-set-converter'"
+		"  plugin: 'custom.javascript'"
+		"  settings:"
+		"    script: |"
+		"      function process(rec) {"
+		"        let field_val = rec.Payload.After[$(q "$column_name")];"
+		"        if (typeof field_val !== 'string') {"
+		"          return rec;"
+		"        }"
+		""
+		"        if (field_val === '') {"
+		"          field_val = undefined;"
+		"        } else {"
+		"          field_val = '{' + field_val.split(',').map((x) => JSON.stringify(x)).join(',') + '}';"
+		"        }"
+		""
+		"        rec.Payload.After[$(q "$column_name")] = field_val;"
+		"        return rec;"
+		"      }"
+		"  condition: '{{ eq (index .Metadata $(q "opencdc.collection")) $(q $table_name) }}' # https://conduit.io/docs/using/processors/conditions"
+		""
+	)
+}
+
+function make_array_converter_processor() {
+	local table_name="$1"
+	local column_name="$2"
+	local underlying_type="$3"
+	local -n lines_ref="$4"
+
+	if echo "$underlying_type" | grep -qP '_set$'; then
+		# pgloader creates set types as array of enums;
+		# the name of this type ends with _set suffix
+		make_set_converter_processor "$table_name" "$column_name" lines_ref
+	fi
 }
 
 function make_processors_config() {
 	local lines=()
 
+	# Log record before any changes
+	make_trace_log_processor "before" lines
+
 	for t in $(list_source_tables); do
-		for col in $(list_boolean_columns "$t"); do
-			lines+=( \
-				"- id: $t-field-$col-converting"
-				"  plugin: $(q "field.convert") # https://conduit.io/docs/using/processors/builtin/field.convert"
-				"  settings:"
-				"    field: $(q ".Payload.After.$col")"
-				"    type: $(q "bool")"
-				"  condition: '{{ eq (index .Metadata $(q "opencdc.collection")) $(q $t) }}' # https://conduit.io/docs/using/processors/conditions"
-				""
-			)
+		declare -A columns_types=()
+		list_dest_columns_types "$t" columns_types
+
+		local columns=( $(echo "${!columns_types[@]}" | tr ' ' '\n' | awk -F',' '{print $1}' | sort -u) )
+
+		for col in "${columns[@]}"; do
+			case "${columns_types["$col,base_type"]}" in
+				"boolean") make_boolean_converter_processor "$t" "$col" lines ;;
+				"ARRAY") make_array_converter_processor "$t" "$col" "${columns_types["$col,underlying_type"]}" lines ;;
+			esac
 		done
 	done
+
+	# Log record after changes
+	make_trace_log_processor "after" lines
 
 	function mapper() { [[ "$1" == "" ]] && echo || echo "      $1"; }
 	map mapper lines
