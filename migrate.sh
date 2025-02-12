@@ -300,6 +300,12 @@ function drop_tmp_file() {
 # Migration
 ###########################################
 
+function mysql_version() {
+	# Returns major and minor version
+	# Usage: read major minor < <(mysql_version)
+	call_mysql "SELECT version() AS version" | awk -F. '{print $1 " " $2}'
+}
+
 function make_pgloader_tables_to_migrate_cmd() {
 	local tables=( $(list_source_tables) )
 
@@ -772,7 +778,7 @@ function make_boolean_converter_processor() {
 		"- id: '$table_name-$column_name-boolean-converter'"
 		"  plugin: 'field.convert' # https://conduit.io/docs/using/processors/builtin/field.convert"
 		"  settings:"
-		"    field: 'Payload.After.$column_name'"
+		"    field: '.Payload.After[$(q $column_name)]'"
 		"    type: 'bool'"
 		"  condition: '{{ eq (index .Metadata $(q "opencdc.collection")) $(q $table_name) }}' # https://conduit.io/docs/using/processors/conditions"
 		""
@@ -783,6 +789,9 @@ function make_set_converter_processor() {
 	local table_name="$1"
 	local column_name="$2"
 	local -n l_ref="$3" # lines_ref name is already exists
+
+	# TODO: check empty string is allowed for enum
+	# select enum_range(null::mrim_servers_mrimtest4_action);
 
 	# This processor could be written on Go, javascript could be too slow
 	# But set datattype is not used very often and easier to implement it on JS
@@ -826,28 +835,52 @@ function make_array_converter_processor() {
 }
 
 function make_timestamp_converter_processor() {
-	local table_name="$1"
-	local column_name="$2"
-	local -n lines_ref="$3"
+	local -n cols_with_timestamps_ref="$1"
+	local -n lines_ref="$2"
 
+	# Optimization: it could be very many timestamp columns in database
+	# Don't try to make own processor for each column
 	lines_ref+=( \
-		"- id: '$table_name-$column_name-timestamp-converter'"
+		"- id: 'pipeline-timestamp-converter'"
 		"  plugin: 'custom.javascript'"
 		"  settings:"
 		"    script: |"
 		"      function process(rec) {"
-		"        if (rec.Payload.After['$column_name'] === '0001-01-01T00:00:00Z') {"
-		"          rec.Payload.After['$column_name'] = undefined; // Store zero-time as NULL"
+		"        switch (req.Metadata['opencdc.collection']) {"
+	)
+
+	local prev_table_name=""
+	for x in "${cols_with_timestamps[@]}"; do
+		# elemets are sorted by table name
+		local table_name=$(echo "$x" | awk -F'|' '{print $1}')
+		local column_name=$(echo "$x" | awk -F'|' '{print $2}')
+
+		if [[ "$table_name" != "$prev_table_name" ]]; then
+			if [[ "$prev_table_name" != "" ]]; then
+				lines_ref+=("            break;")
+			fi
+
+			lines_ref+=("          case '$table_name':")
+			prev_table_name="$table_name"
+		fi
+
+		lines_ref+=( \
+			"            if (rec.Payload.After['$column_name'] === '0001-01-01T00:00:00Z') {"
+			"              rec.Payload.After['$column_name'] = undefined; // Store zero-time as NULL"
+			"            }"
+		)
+	done
+
+	lines_ref+=( \
 		"        }"
 		"        return rec;"
 		"      }"
-		"  condition: '{{ eq (index .Metadata $(q "opencdc.collection")) $(q $table_name) }}'"
-		""
 	)
 }
 
 function make_processors_config() {
 	local lines=()
+	local cols_with_timestamps=()
 
 	# Log record before any changes
 	make_trace_log_processor "before" lines
@@ -862,10 +895,21 @@ function make_processors_config() {
 			case "${columns_types["$col,base_type"]}" in
 				"boolean") make_boolean_converter_processor "$t" "$col" lines ;;
 				"ARRAY") make_array_converter_processor "$t" "$col" "${columns_types["$col,underlying_type"]}" lines ;;
-				"timestamp with time zone") make_timestamp_converter_processor "$t" "$col" lines ;;
+				"timestamp with time zone") cols_with_timestamps+=( "$t|$col" ) ;;
 			esac
 		done
 	done
+
+	local mysql_major_ver=""
+	local mysql_minor_ver=""
+
+	if [ "${#cols_with_timestamps[@]}" -gt 0 ]; then
+		read mysql_major_ver mysql_minor_ver < <(mysql_version)
+		if [ $mysql_major_ver -eq 5 ] && [ $mysql_minor_ver -lt 7 ] || [ $mysql_major_ver -lt 5 ] ; then
+			# zero-timestamps ('0000-00-00 00:00:00') are allowed only in mysql older then 5.7
+			make_timestamp_converter_processor cols_with_timestamps lines
+		fi
+	fi
 
 	# Log record after changes
 	make_trace_log_processor "after" lines
