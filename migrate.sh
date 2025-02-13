@@ -846,7 +846,7 @@ function make_timestamp_converter_processor() {
 		"  settings:"
 		"    script: |"
 		"      function process(rec) {"
-		"        switch (req.Metadata['opencdc.collection']) {"
+		"        switch (rec.Metadata['opencdc.collection']) {"
 	)
 
 	local prev_table_name=""
