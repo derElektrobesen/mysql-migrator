@@ -1007,6 +1007,9 @@ $(setup_cfg_sorting_columns)
 
     processors:
 $(make_processors_config)
+
+      - id: test
+        plugin: 'builtin:mysql-datatypes-processor'
 EOM
 }
 

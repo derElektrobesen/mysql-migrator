@@ -1,4 +1,4 @@
-module github.com/derElektroBesen/mysql-migrator
+module github.com/derElektroBesen/mysql-migrator/conduit
 
 go 1.23.5
 
