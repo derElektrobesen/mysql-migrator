@@ -16,3 +16,7 @@ install-tools:
 fmt:
 	gofumpt -l -w .
 	gci write --skip-generated  .
+
+.PHONY: lint
+lint:
+	golangci-lint run ./...

@@ -1,7 +1,53 @@
 package converters
 
-type SetConverter struct{}
+import (
+	"fmt"
+	"strconv"
+	"strings"
 
-func (SetConverter) Convert(any) (any, error) {
-	return nil, nil
+	"github.com/derElektroBesen/mysql-migrator/conduit/processor/repository"
+)
+
+type setConverter struct {
+	defaultConverter
+
+	field repository.FieldType
+}
+
+func NewSetConverter() Converter {
+	return withDefaultMiddlewares(&setConverter{})
+}
+
+func (c *setConverter) SetFieldType(f repository.FieldType) {
+	c.field = f
+}
+
+func (c *setConverter) Convert(v any) (any, error) {
+	s, ok := v.(string)
+	if !ok {
+		return nil, fmt.Errorf("string is expected, %T found", v)
+	}
+
+	if s == "" {
+		if c.field.IsSuitable(s) {
+			// empty string as allowed by set
+			return `{""}`, nil
+		}
+
+		// empty string isn't allowed by set: return NULL
+		return nil, nil
+	}
+
+	// Comma couldn't be a part of enum in mysql.
+	// That's safe to split string just with comma
+	var res []string
+	for _, el := range strings.Split(s, ",") {
+		if !c.field.IsSuitable(el) {
+			return nil, fmt.Errorf("unexpected field found: %q", el)
+		}
+
+		res = append(res, strconv.Quote(el))
+	}
+
+	return "{" + strings.Join(res, ",") + "}", nil
 }

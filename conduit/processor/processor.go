@@ -3,6 +3,8 @@ package processor
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/conduitio/conduit-commons/config"
@@ -10,36 +12,35 @@ import (
 	sdk "github.com/conduitio/conduit-processor-sdk"
 	"github.com/conduitio/conduit/pkg/foundation/log"
 	"github.com/derElektroBesen/mysql-migrator/conduit/processor/converters"
+	"github.com/derElektroBesen/mysql-migrator/conduit/processor/repository"
 )
 
 //go:generate paramgen -output=processor_paramgen.go migrationProcessorConfig
 
 type collectionConfig struct {
 	// BooleanFields is a list of references to collection boolean fields.
+	// Reference to the field is a field name in .Payload.After structure.
 	// This fields will be converted into boolean using
 	// [strconv.ParseBool](https://pkg.go.dev/strconv#ParseBool) method.
 	//
 	// References should be separated with comma.
-	// Example: .Payload.After.field_a, .Payload.After.field_b
-	//
-	// For more information about the format,
-	// see [Referencing fields](https://conduit.io/docs/using/processors/referencing-fields).
+	// Spaces will be trimmed.
+	// Example: field_a, field_b
 	BooleanFields string `json:"boolean_fields"`
 
 	// SetFields is a list of references to collection fields of type Set.
+	// Reference to the field is a field name in .Payload.After structure.
 	// [Mysql connector](https://github.com/conduitio-labs/conduit-connector-mysql)
 	// represents values of type Set as a comma-separated strings.
 	// Postgres requires brackets around a value.
 	//
 	// References should be separated with comma.
-	// Example: .Payload.After.field_a, .Payload.After.field_b
-	//
-	// For more information about the format,
-	// see [Referencing fields](https://conduit.io/docs/using/processors/referencing-fields).
+	// Spaces will be trimmed.
+	// Example: field_a, field_b
 	SetFields string `json:"set_fields"`
 
-	// TimestampFields is a list of references to collection fields of type
-	// Timestamp.
+	// TimestampFields is a list of references to fields of type Timestamp.
+	// Reference to the field is a field name in .Payload.After structure.
 	// This processor is required for legacy MySQL v5.5 which supports
 	// zero-timestamps (0000-00-00 00:00:00).
 	// [Mysql connector](https://github.com/conduitio-labs/conduit-connector-mysql)
@@ -47,10 +48,8 @@ type collectionConfig struct {
 	// It should be represented into null-values in Postgres.
 	//
 	// References should be separated with comma.
-	// Example: .Payload.After.field_a, .Payload.After.field_b
-	//
-	// For more information about the format,
-	// see [Referencing fields](https://conduit.io/docs/using/processors/referencing-fields).
+	// Spaces will be trimmed.
+	// Example: field_a, field_b
 	TimestampFields string `json:"timestamp_fields"`
 }
 
@@ -59,13 +58,15 @@ type migrationProcessorConfig struct {
 
 	// DSN is required to understand set fields allowed values.
 	// TODO: move this logic in config: at now configuration too
-	// difficult from paramgen restrictions
-	MySQLDBDSN string `json:"mysql_db_dsn" validate:"required,regex=^[^:]+:.*@tcp\\([^:]+:\\d+\\)/\\S+"`
+	// difficult from paramgen restrictions.
+	//
+	// Format: scheme://username:password@host:port/dbname?param1=value1&param2=value2&...
+	PostgresDSN string `json:"mysql_db_dsn" validate:"required"`
 }
 
 type fieldConverter struct {
-	resolver  sdk.ReferenceResolver
-	converter Converter
+	fieldName string
+	converter converters.Converter
 }
 
 type migrationProcessor struct {
@@ -74,6 +75,7 @@ type migrationProcessor struct {
 	logger log.CtxLogger
 
 	collections map[string][]fieldConverter
+	repo        repository.Repository
 }
 
 func NewMigrationProcessor(logger log.CtxLogger) sdk.Processor {
@@ -91,8 +93,29 @@ func (migrationProcessor) Specification() (sdk.Specification, error) {
 	}, nil
 }
 
+func (p *migrationProcessor) Open(ctx context.Context) error {
+	if err := p.repo.Open(ctx); err != nil {
+		return fmt.Errorf("unable to open repository: %w", err)
+	}
+
+	cols := slices.Collect(maps.Keys(p.collections))
+	col, err := p.repo.FetchCollections(ctx, cols...)
+	if err != nil {
+		return fmt.Errorf("unable to fetch collections")
+	}
+
+	for k, v := range p.collections {
+		cc := col.Fields(k)
+		for _, f := range v {
+			f.converter.SetFieldType(cc.Field(f.fieldName))
+		}
+	}
+
+	return nil
+}
+
 func (p *migrationProcessor) Configure(ctx context.Context, c config.Config) error {
-	cfg, err := parseConfig(ctx, c)
+	cfg, err := p.parseConfig(ctx, c)
 	if err != nil {
 		return fmt.Errorf("invalid config: %w", err)
 	}
@@ -102,15 +125,11 @@ func (p *migrationProcessor) Configure(ctx context.Context, c config.Config) err
 	return nil
 }
 
-func parseListOfReferences(list string) ([]sdk.ReferenceResolver, error) {
-	var references []sdk.ReferenceResolver
+func parseListOfReferences(list string) ([]string, error) {
+	var references []string
 	for _, r := range strings.Split(list, ",") {
-		rr, err := sdk.NewReferenceResolver(r)
-		if err != nil {
-			return nil, fmt.Errorf("unable to parse reference %q: %w", r, err)
-		}
-
-		references = append(references, rr)
+		r = strings.TrimSpace(r)
+		references = append(references, r)
 	}
 
 	return references, nil
@@ -120,13 +139,13 @@ func parseCollectionConfig(cfg collectionConfig) ([]fieldConverter, error) {
 	ret := []fieldConverter{}
 
 	for _, x := range []struct {
-		name      string
-		src       string
-		converter Converter
+		name    string
+		src     string
+		newConv func() converters.Converter
 	}{
-		{"BooleanFields", cfg.BooleanFields, converters.BooleanConverter{}},
-		{"SetFields", cfg.SetFields, converters.SetConverter{}},
-		{"TimestampFields", cfg.TimestampFields, converters.TimestampConverter{}},
+		{"BooleanFields", cfg.BooleanFields, converters.NewBooleanConverter},
+		{"TimestampFields", cfg.TimestampFields, converters.NewSetConverter},
+		{"SetFields", cfg.SetFields, converters.NewSetConverter},
 	} {
 		rr, err := parseListOfReferences(x.src)
 		if err != nil {
@@ -135,8 +154,8 @@ func parseCollectionConfig(cfg collectionConfig) ([]fieldConverter, error) {
 
 		for _, r := range rr {
 			ret = append(ret, fieldConverter{
-				resolver:  r,
-				converter: x.converter,
+				fieldName: r,
+				converter: x.newConv(),
 			})
 		}
 	}
@@ -144,12 +163,19 @@ func parseCollectionConfig(cfg collectionConfig) ([]fieldConverter, error) {
 	return ret, nil
 }
 
-func parseConfig(ctx context.Context, c config.Config) (map[string][]fieldConverter, error) {
+func (p *migrationProcessor) parseConfig(ctx context.Context, c config.Config) (map[string][]fieldConverter, error) {
 	cfg := migrationProcessorConfig{}
 	err := sdk.ParseConfig(ctx, c, &cfg, cfg.Parameters())
 	if err != nil {
 		return nil, err
 	}
+
+	repo, err := repository.NewRepository(ctx, cfg.PostgresDSN)
+	if err != nil {
+		return nil, fmt.Errorf("failed creating repository: %w", err)
+	}
+
+	p.repo = repo
 
 	ret := make(map[string][]fieldConverter)
 	for k, v := range cfg.Collections {
@@ -187,20 +213,16 @@ func (p *migrationProcessor) processRecord(rec opencdc.Record) (sdk.ProcessedRec
 		return sdk.SingleRecord(rec), nil
 	}
 
+	payload := rec.Payload.After.(opencdc.StructuredData)
 	for _, c := range converters {
-		field, err := c.resolver.Resolve(&rec)
-		if err != nil {
-			return nil, fmt.Errorf("failed resolving field: %w", err)
-		}
+		field := payload[c.fieldName]
 
-		res, err := c.converter.Convert(field.Get())
+		res, err := c.converter.Convert(field)
 		if err != nil {
 			return nil, fmt.Errorf("failed converting field: %w", err)
 		}
 
-		if err := field.Set(res); err != nil {
-			return nil, fmt.Errorf("failed setting field: %w", err)
-		}
+		payload[c.fieldName] = res
 	}
 
 	return sdk.SingleRecord(rec), nil

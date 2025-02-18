@@ -20,19 +20,19 @@ func (migrationProcessorConfig) Parameters() map[string]config.Parameter {
 	return map[string]config.Parameter{
 		migrationProcessorConfigCollectionsBooleanFields: {
 			Default:     "",
-			Description: "BooleanFields is a list of references to collection boolean fields.\nThis fields will be converted into boolean using\n[strconv.ParseBool](https://pkg.go.dev/strconv#ParseBool) method.\n\nReferences should be separated with comma.\nExample: .Payload.After.field_a, .Payload.After.field_b\n\nFor more information about the format,\nsee [Referencing fields](https://conduit.io/docs/using/processors/referencing-fields).",
+			Description: "BooleanFields is a list of references to collection boolean fields.\nReference to the field is a field name in .Payload.After structure.\nThis fields will be converted into boolean using\n[strconv.ParseBool](https://pkg.go.dev/strconv#ParseBool) method.\n\nReferences should be separated with comma.\nSpaces will be trimmed.\nExample: field_a, field_b",
 			Type:        config.ParameterTypeString,
 			Validations: []config.Validation{},
 		},
 		migrationProcessorConfigCollectionsSetFields: {
 			Default:     "",
-			Description: "SetFields is a list of references to collection fields of type Set.\n[Mysql connector](https://github.com/conduitio-labs/conduit-connector-mysql)\nrepresents values of type Set as a comma-separated strings.\nPostgres requires brackets around a value.\n\nReferences should be separated with comma.\nExample: .Payload.After.field_a, .Payload.After.field_b\n\nFor more information about the format,\nsee [Referencing fields](https://conduit.io/docs/using/processors/referencing-fields).",
+			Description: "SetFields is a list of references to collection fields of type Set.\nReference to the field is a field name in .Payload.After structure.\n[Mysql connector](https://github.com/conduitio-labs/conduit-connector-mysql)\nrepresents values of type Set as a comma-separated strings.\nPostgres requires brackets around a value.\n\nReferences should be separated with comma.\nSpaces will be trimmed.\nExample: field_a, field_b",
 			Type:        config.ParameterTypeString,
 			Validations: []config.Validation{},
 		},
 		migrationProcessorConfigCollectionsTimestampFields: {
 			Default:     "",
-			Description: "TimestampFields is a list of references to collection fields of type\nTimestamp.\nThis processor is required for legacy MySQL v5.5 which supports\nzero-timestamps (0000-00-00 00:00:00).\n[Mysql connector](https://github.com/conduitio-labs/conduit-connector-mysql)\nconverts this kink of timestamps into golang 0-timestamp (0001-01-01 00:00:00).\nIt should be represented into null-values in Postgres.\n\nReferences should be separated with comma.\nExample: .Payload.After.field_a, .Payload.After.field_b\n\nFor more information about the format,\nsee [Referencing fields](https://conduit.io/docs/using/processors/referencing-fields).",
+			Description: "TimestampFields is a list of references to fields of type Timestamp.\nReference to the field is a field name in .Payload.After structure.\nThis processor is required for legacy MySQL v5.5 which supports\nzero-timestamps (0000-00-00 00:00:00).\n[Mysql connector](https://github.com/conduitio-labs/conduit-connector-mysql)\nconverts this kink of timestamps into golang 0-timestamp (0001-01-01 00:00:00).\nIt should be represented into null-values in Postgres.\n\nReferences should be separated with comma.\nSpaces will be trimmed.\nExample: field_a, field_b",
 			Type:        config.ParameterTypeString,
 			Validations: []config.Validation{},
 		},

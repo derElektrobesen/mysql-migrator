@@ -5,9 +5,15 @@ import (
 	"strconv"
 )
 
-type BooleanConverter struct{}
+type booleanConverter struct {
+	defaultConverter
+}
 
-func (c BooleanConverter) Convert(v any) (any, error) {
+func NewBooleanConverter() Converter {
+	return withDefaultMiddlewares(&booleanConverter{})
+}
+
+func (c booleanConverter) Convert(v any) (any, error) {
 	r, err := strconv.ParseBool(c.toString(v))
 	if err != nil {
 		return nil, fmt.Errorf("unable to convert to boolean: %w", err)
@@ -15,7 +21,7 @@ func (c BooleanConverter) Convert(v any) (any, error) {
 	return r, nil
 }
 
-func (BooleanConverter) toString(value any) string {
+func (booleanConverter) toString(value any) string {
 	switch v := value.(type) {
 	case []byte:
 		return string(v)

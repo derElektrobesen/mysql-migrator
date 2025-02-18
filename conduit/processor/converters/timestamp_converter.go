@@ -1,13 +1,21 @@
 package converters
 
-import "fmt"
+import (
+	"fmt"
+)
 
-type TimestampConverter struct{}
+type timestampConverter struct {
+	defaultConverter
+}
 
-func (TimestampConverter) Convert(v any) (any, error) {
+func NewTimestampConverter() Converter {
+	return withDefaultMiddlewares(&timestampConverter{})
+}
+
+func (timestampConverter) Convert(v any) (any, error) {
 	tm, ok := v.(string)
 	if !ok {
-		return nil, fmt.Errorf("invalid timestamp %+v: should be a string")
+		return nil, fmt.Errorf("invalid timestamp %+v (%T): should be a string", tm, tm)
 	}
 
 	if tm == "0001-01-01T00:00:00Z" {
