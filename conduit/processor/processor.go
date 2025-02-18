@@ -125,17 +125,17 @@ func (p *migrationProcessor) Configure(ctx context.Context, c config.Config) err
 	return nil
 }
 
-func parseListOfReferences(list string) ([]string, error) {
-	var references []string
+func parseListOfReferences(list string) []string {
+	references := []string{}
 	for _, r := range strings.Split(list, ",") {
 		r = strings.TrimSpace(r)
 		references = append(references, r)
 	}
 
-	return references, nil
+	return references
 }
 
-func parseCollectionConfig(cfg collectionConfig) ([]fieldConverter, error) {
+func parseCollectionConfig(cfg collectionConfig) []fieldConverter {
 	ret := []fieldConverter{}
 
 	for _, x := range []struct {
@@ -147,12 +147,7 @@ func parseCollectionConfig(cfg collectionConfig) ([]fieldConverter, error) {
 		{"TimestampFields", cfg.TimestampFields, converters.NewSetConverter},
 		{"SetFields", cfg.SetFields, converters.NewSetConverter},
 	} {
-		rr, err := parseListOfReferences(x.src)
-		if err != nil {
-			return []fieldConverter{}, fmt.Errorf("unable to parse %q: %w", x.name, err)
-		}
-
-		for _, r := range rr {
+		for _, r := range parseListOfReferences(x.src) {
 			ret = append(ret, fieldConverter{
 				fieldName: r,
 				converter: x.newConv(),
@@ -160,17 +155,17 @@ func parseCollectionConfig(cfg collectionConfig) ([]fieldConverter, error) {
 		}
 	}
 
-	return ret, nil
+	return ret
 }
 
 func (p *migrationProcessor) parseConfig(ctx context.Context, c config.Config) (map[string][]fieldConverter, error) {
 	cfg := migrationProcessorConfig{}
 	err := sdk.ParseConfig(ctx, c, &cfg, cfg.Parameters())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to parse config: %w", err)
 	}
 
-	repo, err := repository.NewRepository(ctx, cfg.PostgresDSN)
+	repo, err := repository.NewRepository(cfg.PostgresDSN)
 	if err != nil {
 		return nil, fmt.Errorf("failed creating repository: %w", err)
 	}
@@ -179,16 +174,13 @@ func (p *migrationProcessor) parseConfig(ctx context.Context, c config.Config) (
 
 	ret := make(map[string][]fieldConverter)
 	for k, v := range cfg.Collections {
-		ret[k], err = parseCollectionConfig(v)
-		if err != nil {
-			return nil, fmt.Errorf("unable to parse collection %q: %w", k, err)
-		}
+		ret[k] = parseCollectionConfig(v)
 	}
 
 	return ret, nil
 }
 
-func (p *migrationProcessor) Process(ctx context.Context, records []opencdc.Record) []sdk.ProcessedRecord {
+func (p *migrationProcessor) Process(_ context.Context, records []opencdc.Record) []sdk.ProcessedRecord {
 	out := make([]sdk.ProcessedRecord, 0, len(records))
 	for _, rec := range records {
 		proc, err := p.processRecord(rec)
@@ -213,7 +205,11 @@ func (p *migrationProcessor) processRecord(rec opencdc.Record) (sdk.ProcessedRec
 		return sdk.SingleRecord(rec), nil
 	}
 
-	payload := rec.Payload.After.(opencdc.StructuredData)
+	payload, ok := rec.Payload.After.(opencdc.StructuredData)
+	if !ok {
+		return nil, fmt.Errorf("bad record type: %T, %T expected", rec.Payload.After, payload)
+	}
+
 	for _, c := range converters {
 		field := payload[c.fieldName]
 

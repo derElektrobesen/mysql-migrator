@@ -9,8 +9,6 @@ import (
 )
 
 type setConverter struct {
-	defaultConverter
-
 	field repository.FieldType
 }
 
@@ -40,7 +38,7 @@ func (c *setConverter) Convert(v any) (any, error) {
 
 	// Comma couldn't be a part of enum in mysql.
 	// That's safe to split string just with comma
-	var res []string
+	res := make([]string, 0)
 	for _, el := range strings.Split(s, ",") {
 		if !c.field.IsSuitable(el) {
 			return nil, fmt.Errorf("unexpected field found: %q", el)

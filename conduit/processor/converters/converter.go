@@ -26,7 +26,7 @@ func (m defaultMiddleware) Convert(v any) (any, error) {
 		return nil, nil
 	}
 
-	return m.c.Convert(v)
+	return m.c.Convert(v) //nolint:wrapcheck // there is no sense to wrap an error
 }
 
 func (m defaultMiddleware) SetFieldType(f repository.FieldType) {

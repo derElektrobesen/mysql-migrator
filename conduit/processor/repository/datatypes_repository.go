@@ -41,7 +41,7 @@ type repository struct {
 	dsn    string
 }
 
-func NewRepository(ctx context.Context, dsn string) (Repository, error) {
+func NewRepository(dsn string) (Repository, error) {
 	cfg, err := pq.ParseURL(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse given URL: %w", err)

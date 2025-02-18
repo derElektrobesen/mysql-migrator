@@ -86,7 +86,6 @@ linters:
     - nakedret
     - nestif
     - nilerr
-    - nilnil
     - noctx
     - nolintlint
     - nosprintfhostport
@@ -96,10 +95,9 @@ linters:
     - reassign
     - revive
     - rowserrcheck
-    - sqlclosecheck
+    # - sqlclosecheck # sqlx used: no Close() statement is required
     - staticcheck
     - stylecheck
-    - tenv
     - testableexamples
     # - thelper
     - unconvert

@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
+	"os"
 
 	sdk "github.com/conduitio/conduit-connector-sdk"
 	"github.com/conduitio/conduit/pkg/conduit"
@@ -15,7 +15,7 @@ import (
 )
 
 func readYAMLConfig(filename string, dest *conduit.Config) error {
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return fmt.Errorf("unable to read file %q: %w", filename, err)
 	}
