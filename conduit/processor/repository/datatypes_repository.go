@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"iter"
 	"regexp"
 
 	"github.com/jmoiron/sqlx"
@@ -33,6 +34,16 @@ func (cc Collections) Fields(name string) FieldsCollection {
 
 func (c collection) Field(name string) FieldType {
 	return c.fieldsTypes[name]
+}
+
+func (c collection) Fields() iter.Seq[string] {
+	return func(yield func(string) bool) {
+		for k := range c.fieldsTypes {
+			if !yield(k) {
+				return
+			}
+		}
+	}
 }
 
 type repository struct {
@@ -69,9 +80,10 @@ func (r *repository) Open(ctx context.Context) error {
 	return nil
 }
 
+var dbNameRe = regexp.MustCompile(`\bdbname=(\S+)`)
+
 func parseDBName(cfg string) (string, error) {
-	re := regexp.MustCompile(`\bdbname=(\S+)`)
-	res := re.FindStringSubmatch(cfg)
+	res := dbNameRe.FindStringSubmatch(cfg)
 	if len(res) < 1 {
 		return "", fmt.Errorf("database name didn't passed in DSN")
 	}
@@ -178,7 +190,11 @@ func newDataType(ctx context.Context, repo Repository, name string, underlyingNa
 	case "ARRAY":
 		// this data type is composite
 		return newArrayDataType(ctx, repo, underlyingName)
+	case "boolean":
+		return newBooleanDataType(), nil
+	case "timestamp with timezone":
+		return newTimestampDataType(), nil
 	default:
-		return newSimpleDataType(ctx, repo, name)
+		return newAnyDataType(), nil
 	}
 }

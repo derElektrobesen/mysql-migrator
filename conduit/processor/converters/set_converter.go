@@ -9,15 +9,13 @@ import (
 )
 
 type setConverter struct {
-	field repository.FieldType
+	field repository.EnumDataType
 }
 
-func NewSetConverter() Converter {
-	return withDefaultMiddlewares(&setConverter{})
-}
-
-func (c *setConverter) SetFieldType(f repository.FieldType) {
-	c.field = f
+func NewSetConverter(field repository.EnumDataType) Converter {
+	return withDefaultMiddlewares(&setConverter{
+		field: field,
+	})
 }
 
 func (c *setConverter) Convert(v any) (any, error) {

@@ -5,21 +5,25 @@ import (
 	"fmt"
 )
 
-type FieldType interface {
-	IsSuitable(value string) bool
-}
+type FieldKind int
 
-type anyDataType struct{}
+const (
+	UnknownField FieldKind = iota
+	BooleanField
+	ArrayField
+	EnumField
+	TimestampField
+)
 
-func (anyDataType) IsSuitable(string) bool {
-	return true
-}
+type FieldType interface{}
+
+type AnyDataType struct{}
 
 func newAnyDataType() FieldType {
-	return anyDataType{}
+	return AnyDataType{}
 }
 
-type arrayDataType struct {
+type ArrayDataType struct {
 	itemType FieldType
 }
 
@@ -29,16 +33,16 @@ func newArrayDataType(ctx context.Context, r Repository, underlyingType string) 
 		return nil, fmt.Errorf("bad type: %w", err)
 	}
 
-	return arrayDataType{
+	return ArrayDataType{
 		itemType: t,
 	}, nil
 }
 
-func (t arrayDataType) IsSuitable(v string) bool {
-	return t.itemType.IsSuitable(v)
+func (t ArrayDataType) NestedType() FieldType {
+	return t.itemType
 }
 
-type enumDataType struct {
+type EnumDataType struct {
 	allowedValues map[string]bool
 }
 
@@ -53,11 +57,23 @@ func newEnumDataType(ctx context.Context, r Repository, name string) (FieldType,
 		m[v] = true
 	}
 
-	return enumDataType{
+	return EnumDataType{
 		allowedValues: m,
 	}, nil
 }
 
-func (t enumDataType) IsSuitable(v string) bool {
+func (t EnumDataType) IsSuitable(v string) bool {
 	return t.allowedValues[v]
+}
+
+type BooleanDataType struct{}
+
+func newBooleanDataType() FieldType {
+	return BooleanDataType{}
+}
+
+type TimestampDataType struct{}
+
+func newTimestampDataType() FieldType {
+	return TimestampDataType{}
 }

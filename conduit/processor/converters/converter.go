@@ -4,7 +4,6 @@ import "github.com/derElektroBesen/mysql-migrator/conduit/processor/repository"
 
 type Converter interface {
 	Convert(any) (any, error)
-	SetFieldType(repository.FieldType)
 }
 
 type defaultConverter struct{}
@@ -27,8 +26,4 @@ func (m defaultMiddleware) Convert(v any) (any, error) {
 	}
 
 	return m.c.Convert(v) //nolint:wrapcheck // there is no sense to wrap an error
-}
-
-func (m defaultMiddleware) SetFieldType(f repository.FieldType) {
-	m.c.SetFieldType(f)
 }
