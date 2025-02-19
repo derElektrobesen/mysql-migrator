@@ -4,45 +4,30 @@
 package processor
 
 import (
-	"regexp"
-
 	"github.com/conduitio/conduit-commons/config"
 )
 
 const (
-	migrationProcessorConfigCollectionsBooleanFields   = "collections.*.boolean_fields"
-	migrationProcessorConfigCollectionsSetFields       = "collections.*.set_fields"
-	migrationProcessorConfigCollectionsTimestampFields = "collections.*.timestamp_fields"
-	migrationProcessorConfigMysqlDbDsn                 = "mysql_db_dsn"
+	migrationProcessorConfigCollections = "collections"
+	migrationProcessorConfigPostgresDsn = "postgres_dsn"
 )
 
 func (migrationProcessorConfig) Parameters() map[string]config.Parameter {
 	return map[string]config.Parameter{
-		migrationProcessorConfigCollectionsBooleanFields: {
+		migrationProcessorConfigCollections: {
 			Default:     "",
-			Description: "BooleanFields is a list of references to collection boolean fields.\nReference to the field is a field name in .Payload.After structure.\nThis fields will be converted into boolean using\n[strconv.ParseBool](https://pkg.go.dev/strconv#ParseBool) method.\n\nReferences should be separated with comma.\nSpaces will be trimmed.\nExample: field_a, field_b",
-			Type:        config.ParameterTypeString,
-			Validations: []config.Validation{},
-		},
-		migrationProcessorConfigCollectionsSetFields: {
-			Default:     "",
-			Description: "SetFields is a list of references to collection fields of type Set.\nReference to the field is a field name in .Payload.After structure.\n[Mysql connector](https://github.com/conduitio-labs/conduit-connector-mysql)\nrepresents values of type Set as a comma-separated strings.\nPostgres requires brackets around a value.\n\nReferences should be separated with comma.\nSpaces will be trimmed.\nExample: field_a, field_b",
-			Type:        config.ParameterTypeString,
-			Validations: []config.Validation{},
-		},
-		migrationProcessorConfigCollectionsTimestampFields: {
-			Default:     "",
-			Description: "TimestampFields is a list of references to fields of type Timestamp.\nReference to the field is a field name in .Payload.After structure.\nThis processor is required for legacy MySQL v5.5 which supports\nzero-timestamps (0000-00-00 00:00:00).\n[Mysql connector](https://github.com/conduitio-labs/conduit-connector-mysql)\nconverts this kink of timestamps into golang 0-timestamp (0001-01-01 00:00:00).\nIt should be represented into null-values in Postgres.\n\nReferences should be separated with comma.\nSpaces will be trimmed.\nExample: field_a, field_b",
-			Type:        config.ParameterTypeString,
-			Validations: []config.Validation{},
-		},
-		migrationProcessorConfigMysqlDbDsn: {
-			Default:     "",
-			Description: "DSN is required to understand set fields allowed values.\nTODO: move this logic in config: at now configuration too\ndifficult from paramgen restrictions",
+			Description: "Collections is a list of allowed collections.\nUnknown collections passed in processor will trigger an error",
 			Type:        config.ParameterTypeString,
 			Validations: []config.Validation{
 				config.ValidationRequired{},
-				config.ValidationRegex{Regex: regexp.MustCompile("^[^:]+:.*@tcp\\([^:]+:\\d+\\)/\\S+")},
+			},
+		},
+		migrationProcessorConfigPostgresDsn: {
+			Default:     "",
+			Description: "DSN is required to understand set fields allowed values.\n\nFormat: scheme://username:password@host:port/dbname?param1=value1&param2=value2&...",
+			Type:        config.ParameterTypeString,
+			Validations: []config.Validation{
+				config.ValidationRequired{},
 			},
 		},
 	}
