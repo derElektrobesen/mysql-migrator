@@ -3,6 +3,9 @@ package processor
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
+	"strings"
 
 	"github.com/conduitio/conduit-commons/config"
 	"github.com/conduitio/conduit-commons/opencdc"
@@ -22,7 +25,7 @@ type migrationProcessorConfig struct {
 
 	// Collections is a list of allowed collections.
 	// Unknown collections passed in processor will trigger an error
-	Collections []string `json:"collections" validate:"required"`
+	Collections string `json:"collections" validate:"required"`
 }
 
 type migrationProcessor struct {
@@ -55,9 +58,16 @@ func (p *migrationProcessor) Open(ctx context.Context) error {
 		return fmt.Errorf("unable to open repository: %w", err)
 	}
 
-	col, err := p.repo.FetchCollections(ctx, p.collections...)
+	col, err := p.repo.FetchCollections(ctx, p.collections)
 	if err != nil {
-		return fmt.Errorf("unable to fetch collections")
+		return fmt.Errorf("unable to fetch collections: %w", err)
+	}
+
+	sortedA := slices.Sorted(slices.Values(p.collections))
+	sortedB := slices.Sorted(maps.Keys(col))
+	if !slices.Equal(sortedA, sortedB) {
+		return fmt.Errorf("not all collections found in database: %v expected, %v found",
+			sortedA, sortedB)
 	}
 
 	p.converters = make(map[string]map[string]converters.Converter)
@@ -89,8 +99,11 @@ func (p *migrationProcessor) Configure(ctx context.Context, c config.Config) err
 		return fmt.Errorf("failed creating repository: %w", err)
 	}
 
+	for _, c := range strings.Split(cfg.Collections, ",") {
+		p.collections = append(p.collections, strings.TrimSpace(c))
+	}
+
 	p.repo = repo
-	p.collections = cfg.Collections
 
 	return nil
 }
@@ -117,6 +130,8 @@ func (p *migrationProcessor) processRecord(rec opencdc.Record) (sdk.ProcessedRec
 
 	conv := p.converters[col]
 	if conv == nil {
+		// This error is required because we can't understand unknown
+		// collection fields types => converters aren't made
 		return nil, fmt.Errorf("unknown collection %q", col)
 	}
 

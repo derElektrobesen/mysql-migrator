@@ -300,12 +300,6 @@ function drop_tmp_file() {
 # Migration
 ###########################################
 
-function mysql_version() {
-	# Returns major and minor version
-	# Usage: read major minor < <(mysql_version)
-	call_mysql "SELECT version() AS version" | awk -F. '{print $1 " " $2}'
-}
-
 function make_pgloader_tables_to_migrate_cmd() {
 	local tables=( $(list_source_tables) )
 
@@ -720,30 +714,6 @@ function disable_indexes() {
 	done
 }
 
-function list_dest_columns_types() {
-	local table_name="$1"
-	local -n dest_ref="$2"
-
-	local res="$(call_psql \
-		"$(echo "SELECT" \
-			"column_name, data_type, udt_name" \
-			"FROM information_schema.columns" \
-			"WHERE table_schema = '${postgres_conf[schema_name]}' AND table_name = '$table_name'" \
-		)" \
-	)"
-
-	IFS=$'\n' read -rd '' -a rows <<<"$res" # split lines into array
-
-	for row in "${rows[@]}"; do
-		local col_name=$(echo "$row" | awk -F'|' '{print $1}' | perl -pe 's/^\s*|\s*$//g')
-		local col_type=$(echo "$row" | awk -F'|' '{print $2}' | perl -pe 's/^\s*|\s*$//g')
-		local underlying_type=$(echo "$row" | awk -F'|' '{print $3}' | perl -pe 's/^\s*|\s*$//g')
-
-		dest_ref["$col_name,base_type"]="$col_type"
-		dest_ref["$col_name,underlying_type"]="$underlying_type"
-	done
-}
-
 function make_trace_log_processor() {
 	if [ $trace -ne 1 ]; then
 		return
@@ -769,149 +739,26 @@ function make_trace_log_processor() {
 	)
 }
 
-function make_boolean_converter_processor() {
-	local table_name="$1"
-	local column_name="$2"
-	local -n lines_ref="$3"
-
-	lines_ref+=( \
-		"- id: '$table_name-$column_name-boolean-converter'"
-		"  plugin: 'field.convert' # https://conduit.io/docs/using/processors/builtin/field.convert"
-		"  settings:"
-		"    field: '.Payload.After[$(q $column_name)]'"
-		"    type: 'bool'"
-		"  condition: '{{ eq (index .Metadata $(q "opencdc.collection")) $(q $table_name) }}' # https://conduit.io/docs/using/processors/conditions"
-		""
-	)
-}
-
-function make_set_converter_processor() {
-	local table_name="$1"
-	local column_name="$2"
-	local -n l_ref="$3" # lines_ref name is already exists
-
-	# TODO: check empty string is allowed for enum
-	# select enum_range(null::mrim_servers_mrimtest4_action);
-
-	# This processor could be written on Go, javascript could be too slow
-	# But set datattype is not used very often and easier to implement it on JS
-	l_ref+=( \
-		"- id: '$table_name-$column_name-set-converter'"
-		"  plugin: 'custom.javascript'"
-		"  settings:"
-		"    script: |"
-		"      function process(rec) {"
-		"        let field_val = rec.Payload.After['$column_name'];"
-		"        if (typeof field_val !== 'string') {"
-		"          return rec;"
-		"        }"
-		""
-		"        if (field_val === '') {"
-		"          field_val = undefined; // set is empty"
-		"        } else {"
-		"          // create postgressql array from set"
-		"          field_val = '{' + field_val.split(',').map((x) => JSON.stringify(x)).join(',') + '}';"
-		"        }"
-		""
-		"        rec.Payload.After['$column_name'] = field_val;"
-		"        return rec;"
-		"      }"
-		"  condition: '{{ eq (index .Metadata $(q "opencdc.collection")) $(q $table_name) }}' # https://conduit.io/docs/using/processors/conditions"
-		""
-	)
-}
-
-function make_array_converter_processor() {
-	local table_name="$1"
-	local column_name="$2"
-	local underlying_type="$3"
-	local -n lines_ref="$4"
-
-	if echo "$underlying_type" | grep -qP '_set$'; then
-		# pgloader creates set types as array of enums;
-		# the name of this type ends with _set suffix
-		make_set_converter_processor "$table_name" "$column_name" lines_ref
-	fi
-}
-
-function make_timestamp_converter_processor() {
-	local -n cols_with_timestamps_ref="$1"
+function make_base_processor() {
+	local tables_list="$1"
 	local -n lines_ref="$2"
 
-	# Optimization: it could be very many timestamp columns in database
-	# Don't try to make own processor for each column
 	lines_ref+=( \
-		"- id: 'pipeline-timestamp-converter'"
-		"  plugin: 'custom.javascript'"
+		"- id: 'base-processor'"
+		"  plugin: 'builtin:mysql-datatypes-processor'"
 		"  settings:"
-		"    script: |"
-		"      function process(rec) {"
-		"        switch (rec.Metadata['opencdc.collection']) {"
-	)
-
-	local prev_table_name=""
-	for x in "${cols_with_timestamps[@]}"; do
-		# elemets are sorted by table name
-		local table_name=$(echo "$x" | awk -F'|' '{print $1}')
-		local column_name=$(echo "$x" | awk -F'|' '{print $2}')
-
-		if [[ "$table_name" != "$prev_table_name" ]]; then
-			if [[ "$prev_table_name" != "" ]]; then
-				lines_ref+=("            break;")
-			fi
-
-			lines_ref+=("          case '$table_name':")
-			prev_table_name="$table_name"
-		fi
-
-		lines_ref+=( \
-			"            if (rec.Payload.After['$column_name'] === '0001-01-01T00:00:00Z') {"
-			"              rec.Payload.After['$column_name'] = undefined; // Store zero-time as NULL"
-			"            }"
-		)
-	done
-
-	lines_ref+=( \
-		"        }"
-		"        return rec;"
-		"      }"
+		"    postgres_dsn: 'postgresql://${postgres_conf[login]}:${postgres_conf[pass]}@${postgres_conf[host]}:${postgres_conf[port]}/${postgres_conf[db_name]}'"
+		"    collections: '$tables_list'"
 	)
 }
 
 function make_processors_config() {
+	local tables_list="$1"
 	local lines=()
 	local cols_with_timestamps=()
 
-	# Log record before any changes
 	make_trace_log_processor "before" lines
-
-	for t in $(list_source_tables); do
-		declare -A columns_types=()
-		list_dest_columns_types "$t" columns_types
-
-		local columns=( $(echo "${!columns_types[@]}" | tr ' ' '\n' | awk -F',' '{print $1}' | sort -u) )
-
-		for col in "${columns[@]}"; do
-			case "${columns_types["$col,base_type"]}" in
-				"boolean") make_boolean_converter_processor "$t" "$col" lines ;;
-				"ARRAY") make_array_converter_processor "$t" "$col" "${columns_types["$col,underlying_type"]}" lines ;;
-				"timestamp with time zone") cols_with_timestamps+=( "$t|$col" ) ;;
-			esac
-		done
-	done
-
-	local mysql_major_ver=""
-	local mysql_minor_ver=""
-
-	if [ "${#cols_with_timestamps[@]}" -gt 0 ]; then
-		read mysql_major_ver mysql_minor_ver < <(mysql_version)
-		if [ $mysql_major_ver -eq 5 ] && [ $mysql_minor_ver -lt 7 ] || [ $mysql_major_ver -lt 5 ] ; then
-			# zero-timestamps ('0000-00-00 00:00:00') are allowed only in mysql older then 5.7
-			make_timestamp_converter_processor cols_with_timestamps lines
-		fi
-	fi
-
-	# Log record after changes
+	make_base_processor "$tables_list" lines
 	make_trace_log_processor "after" lines
 
 	function mapper() { [[ "$1" == "" ]] && echo || echo "      $1"; }
@@ -1006,10 +853,7 @@ $(setup_cfg_sorting_columns)
           sdk.batch.delay: 100ms
 
     processors:
-$(make_processors_config)
-
-      - id: test
-        plugin: 'builtin:mysql-datatypes-processor'
+$(make_processors_config "$tables_list")
 EOM
 }
 

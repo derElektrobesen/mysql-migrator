@@ -4,16 +4,16 @@ import (
 	"context"
 	"fmt"
 	"iter"
-	"regexp"
 
+	_ "github.com/jackc/pgx/stdlib"
+	"github.com/jackc/pgx/v5"
 	"github.com/jmoiron/sqlx"
-	"github.com/lib/pq"
 )
 
 type Repository interface {
 	Open(ctx context.Context) error
 
-	FetchCollections(ctx context.Context, collections ...string) (Collections, error)
+	FetchCollections(ctx context.Context, collections []string) (Collections, error)
 	TypeCategory(ctx context.Context, name string) (string, error)
 	EnumRange(ctx context.Context, name string) ([]string, error)
 }
@@ -47,30 +47,23 @@ func (c collection) Fields() iter.Seq[string] {
 }
 
 type repository struct {
-	db     *sqlx.DB
-	dbName string
-	dsn    string
+	db    *sqlx.DB
+	dbCfg *pgx.ConnConfig
 }
 
 func NewRepository(dsn string) (Repository, error) {
-	cfg, err := pq.ParseURL(dsn)
+	cfg, err := pgx.ParseConfig(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse given URL: %w", err)
 	}
 
-	dbName, err := parseDBName(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse DSN: %w", err)
-	}
-
 	return &repository{
-		dbName: dbName,
-		dsn:    cfg,
+		dbCfg: cfg,
 	}, nil
 }
 
 func (r *repository) Open(ctx context.Context) error {
-	db, err := sqlx.ConnectContext(ctx, "postgres", r.dsn)
+	db, err := sqlx.ConnectContext(ctx, "pgx", r.dbCfg.ConnString())
 	if err != nil {
 		return fmt.Errorf("failed to connect to postgres: %w", err)
 	}
@@ -80,17 +73,6 @@ func (r *repository) Open(ctx context.Context) error {
 	return nil
 }
 
-var dbNameRe = regexp.MustCompile(`\bdbname=(\S+)`)
-
-func parseDBName(cfg string) (string, error) {
-	res := dbNameRe.FindStringSubmatch(cfg)
-	if len(res) < 1 {
-		return "", fmt.Errorf("database name didn't passed in DSN")
-	}
-
-	return res[0], nil
-}
-
 type dataTypeRow struct {
 	TableName  string `db:"table_name"`
 	ColumnName string `db:"column_name"`
@@ -98,15 +80,22 @@ type dataTypeRow struct {
 	UDTName    string `db:"udt_name"`
 }
 
-func (r *repository) FetchCollections(ctx context.Context, collections ...string) (Collections, error) {
-	rows, err := r.db.QueryxContext(ctx, `
+func (r *repository) FetchCollections(ctx context.Context, collections []string) (Collections, error) {
+	query, args, err := sqlx.In(`
 		SELECT
 			column_name, data_type, udt_name, table_name
 		FROM
 			information_schema.columns
 		WHERE
-			table_schema = ? AND table_name IN (?)
-	`, r.dbName, collections)
+			table_catalog = ? AND table_name IN (?)
+	`, r.dbCfg.Database, collections)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare IN statement: %w", err)
+	}
+
+	query = r.db.Rebind(query)
+	rows, err := r.db.QueryxContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch collections types: %w", err)
 	}
@@ -141,22 +130,26 @@ func (r *repository) EnumRange(ctx context.Context, name string) ([]string, erro
 }
 
 func (r *repository) TypeCategory(ctx context.Context, name string) (string, error) {
-	var res string
+	var res []string
 	err := r.db.SelectContext(ctx, &res,
-		`SELECT typcategory FROM pg_type WHERE typname = ?`,
+		`SELECT typcategory FROM pg_type WHERE typname = $1`,
 		name,
 	)
 	if err != nil {
 		return "", fmt.Errorf("failed to select type category: %w", err)
 	}
 
-	return res, nil
+	if len(res) != 1 {
+		return "", fmt.Errorf("bad type %q: typcategories found: %v", name, res)
+	}
+
+	return res[0], nil
 }
 
 func (cc Collections) newDataType(ctx context.Context, v dataTypeRow, r Repository) error {
 	t, err := newDataType(ctx, r, v.DataType, v.UDTName)
 	if err != nil {
-		return fmt.Errorf("unable to mane data type: %w", err)
+		return fmt.Errorf("unable to make data type: %w", err)
 	}
 
 	c := cc[v.TableName]
