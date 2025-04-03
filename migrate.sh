@@ -7,11 +7,8 @@ trap "exit 1" TERM
 PID=$$
 
 work_dir="$PWD"
-bin_dir="$PWD"
-dry_run=0
 cleanup=0
 trace=0
-do_migrate_schema=1
 tables_to_migrate=()
 skip_tables=()
 
@@ -29,13 +26,7 @@ declare -A allowed_flags=(
 	["--trace,help"]="Enable tracing"
 
 	["--cleanup,method"]=enable_cleanup
-	["--cleanup,help"]="Cleanup dst database before migration"
-
-	["--dry-run,method"]=enable_dry_run
-	["--dry-run,help"]="Run script in dry-run mode"
-
-	["--no-schema-migration,method"]=disable_schema_migration
-	["--no-schema-migration,help"]="Skip schema migration using pgloader. Useful for migration restarting"
+	["--cleanup,help"]="Cleanup work dir"
 
 	["--mysql,method"]=parse_mysql_dsn
 	["--mysql,has_arg"]=1
@@ -55,10 +46,6 @@ declare -A allowed_flags=(
 	["--work-dir,has_arg"]=1
 	["--work-dir,help"]="Script work directory (default: $work_dir)"
 
-	["--bin-dir,method"]=set_bin_dir
-	["--bin-dir,has_arg"]=1
-	["--bin-dir,help"]="Directory with binaries (default: $bin_dir)"
-
 	["--tables,method"]=set_tables_to_migrate
 	["--tables,has_arg"]=1
 	["--tables,help"]="Comma-separated list of tables to migrate, (default: all)"
@@ -69,17 +56,12 @@ declare -A allowed_flags=(
 )
 
 declare -A binaries
-required_global_tools=(
+required_tools=(
 	mysql
-	psql
-)
-required_local_tools=(
-	pgloader
-	conduit
 )
 
 ###########################################
-# Preparing
+#               Preparing                 #
 ###########################################
 
 function run() {
@@ -90,7 +72,8 @@ function run() {
 		postgres_conf[schema_name]=${mysql_conf[db_name]}
 	fi
 
-	run_migration
+	render_pgloader_run_script
+	render_conduit_run_script
 }
 
 function parse_args() {
@@ -137,16 +120,8 @@ function parse_args() {
 	done
 }
 
-function enable_dry_run() {
-	dry_run=1
-}
-
 function enable_cleanup() {
 	cleanup=1
-}
-
-function disable_schema_migration() {
-	do_migrate_schema=0
 }
 
 function set_schema_name() {
@@ -178,13 +153,8 @@ function set_work_dir() {
 	check_dir $work_dir
 }
 
-function set_bin_dir() {
-	bin_dir=$1
-	check_dir $bin_dir
-}
-
 function usage() {
-	echo "Mysql to another datasource migration tool"
+	echo "Mysql to postgres migration tool"
 	echo "Usage: $0 <flags>"
 	echo
 	echo "Available flags:"
@@ -269,11 +239,6 @@ function parse_dsn() {
 function validate_env() {
 	local bad_tool=0
 
-	local required_tools=( ${required_global_tools[@]} )
-	for x in "${required_local_tools[@]}"; do
-		required_tools+=( "$bin_dir/$x" )
-	done
-
 	for x in "${required_tools[@]}"; do
 		local p=$(command -v "$x")
 		if [ "$p" == "" ]; then
@@ -297,83 +262,25 @@ function drop_tmp_file() {
 }
 
 ###########################################
-# Migration
+#               Migration                 #
 ###########################################
 
-function make_pgloader_tables_to_migrate_cmd() {
-	local tables=( $(list_source_tables) )
+###########################################
+# DB Utilities
+###########################################
 
-	function mapper() { echo "'$1'"; }
-	map mapper tables
-
-	printf "INCLUDING ONLY TABLE NAMES MATCHING $(join ", " tables)\n"
-}
-
-function make_pgloader_rename_queries() {
-	local table_name="$1"
-	local -n queries="$2"
-
-	local table_name_lc=$(echo "$table_name" | perl -ne 'print lc')
-	if [ "$table_name_lc" != "$table_name" ]; then
-		queries+=("ALTER TABLE $(q ${postgres_conf[schema_name]}).$(q $table_name_lc) RENAME TO $(q $table_name)")
-	fi
-
-	for col_name in $(list_columns_in_source_table $table_name); do
-		local col_name_lc=$(echo "$col_name" | perl -ne 'print lc')
-
-		if [ "$col_name" != "$col_name_lc" ]; then
-			queries+=("ALTER TABLE $(q ${postgres_conf[schema_name]}).$(q $table_name) RENAME COLUMN $(q $col_name_lc) TO $(q $col_name)")
-		fi
-	done
-}
-
-function make_pgloader_after_queries() {
-	local prev_schema_name=$(echo "${mysql_conf[db_name]}" | perl -ne 'print lc') # pgloader migrates without case respect
-
-	local after_queries=( "SELECT 1" ) # need to ignore case when there is no after queries required at all
-	if [ "$prev_schema_name" != "${postgres_conf[schema_name]}" ]; then
-		after_queries+=("ALTER SCHEMA $(q $prev_schema_name) RENAME TO $(q ${postgres_conf[schema_name]})")
-		after_queries+=("ALTER DATABASE $(q ${postgres_conf[db_name]}) SET search_path = $(q ${postgres_conf[schema_name]}), public")
-	fi
-
-	for t in $(list_source_tables); do
-		make_pgloader_rename_queries "$t" after_queries
-	done
-
-	function mapper() { printf '        $$%s$$' "$1"; }
-	map mapper after_queries
-	printf "AFTER LOAD DO\n$(join $',\n' after_queries)"
-}
-
-function make_pgloader_script() {
-	local filename="$1"
-
-	local after_load_do=$(make_pgloader_after_queries)
-	local tables_to_import_q=$(make_pgloader_tables_to_migrate_cmd)
-
-	cat > $filename <<- EOM
-LOAD DATABASE
-    FROM      mysql://${mysql_conf[login]}:${mysql_conf[pass]}@${mysql_conf[host]}:${mysql_conf[port]}/${mysql_conf[db_name]}
-    INTO postgresql://${postgres_conf[login]}:${postgres_conf[pass]}@${postgres_conf[host]}:${postgres_conf[port]}/${postgres_conf[db_name]}
-    WITH SCHEMA ONLY
-    $tables_to_import_q
-    $after_load_do
-;
-EOM
-}
-
-function call_psql_real() {
+function psql_call_cmd() {
 	local cmd="$1"
 	local db_name="$2"
 
-	echo "$cmd" | \
-		PGPASSWORD="${postgres_conf[pass]}" ${binaries[psql]} \
-			--host ${postgres_conf[host]} \
-			--port ${postgres_conf[port]} \
-			--username ${postgres_conf[login]} \
-			$db_name 2>"$tmp_file" | \
-		tail -n +3 | \
-		head -n -2
+	cat <<-EOM | awk '{ gsub(/[[:blank:]]+/, " "); print }'
+echo '$cmd' | \
+	PGPASSWORD="${postgres_conf[pass]}" psql \
+		--host ${postgres_conf[host]} \
+		--port ${postgres_conf[port]} \
+		--username ${postgres_conf[login]} \
+		$db_name
+EOM
 }
 
 function call_mysql_real() {
@@ -423,28 +330,6 @@ function call_db_expect_error() {
 	fi
 }
 
-function call_psql_expect_error() {
-	local cmd="$1"
-	local expect_error="$2"
-
-	local db_name="${postgres_conf[db_name]}"
-	if [[ "${3+xxx}" == "xxx" ]] && [ "$3" != "" ]; then
-		db_name="$3"
-	fi
-
-	call_db_expect_error "$cmd" "$expect_error" "$db_name" call_psql_real
-}
-
-function call_psql() {
-	# multiline result will be returned
-	local db_name=""
-	if [[ "${2+xxx}" == "xxx" ]]; then
-		db_name="$2"
-	fi
-
-	call_psql_expect_error "$1" 0 "$db_name"
-}
-
 function call_mysql_expect_error() {
 	local cmd="$1"
 	local expect_error="$2"
@@ -465,133 +350,6 @@ function call_mysql() {
 	fi
 
 	call_mysql_expect_error "$1" 0 "$db_name"
-}
-
-function modify() {
-	local cmd="$1"
-
-	if [ $dry_run -eq 1 ]; then
-		info "dry-ryn: skip"
-	else
-		eval "$cmd"
-	fi
-}
-
-function create_dst_database_impl() {
-	call_psql "CREATE DATABASE $(q ${postgres_conf[db_name]})" "postgres" > /dev/null
-}
-
-function check_dst_db_exists() {
-	local err_msg
-	local res
-	read res err_msg < <(call_psql_expect_error 'SELECT 1' 1)
-
-	if [ "$res" == "1" ]; then
-		# database already exists
-		echo 1
-		return
-	fi
-
-	local x=$(echo "$err_msg" | grep "database "\""${postgres_conf[db_name]}"\"" does not exist")
-	if [ "$x" == "" ]; then
-		error "unknown error expected during postgres database verification: $err_msg"
-	fi
-
-	echo 0
-}
-
-function create_dst_database() {
-	if [ "$(check_dst_db_exists)" == "1" ]; then
-		# database already exists
-		info "database ${postgres_conf[db_name]} found in postgres, continue"
-		return
-	fi
-
-	info "database ${postgres_conf[db_name]} not found in postgres. $(magenta 'Create one')"
-	modify create_dst_database_impl
-}
-
-function prepare_dst_database() {
-	create_dst_database
-}
-
-function migrate_schema() {
-	local w_dir=$(realpath "$work_dir/pgloader")
-
-	if [ $cleanup -eq 1 ]; then
-		warning "delete directory $(magenta $w_dir)"
-		modify "rm -rf $w_dir"
-	fi
-
-	mkdir -p $w_dir
-
-	local log_file="$w_dir/pgloader.log"
-	rm -f $log_file
-
-	local summary_file="$w_dir/pgloader_summary.log"
-
-	local load_script="$w_dir/migrate.load"
-	make_pgloader_script "$load_script"
-
-	local extra_args="--summary $summary_file --root-dir $w_dir --logfile $log_file --on-error-stop"
-	if [ $dry_run -eq 1 ]; then
-		extra_args="$extra_args --dry-run"
-	fi
-
-	if [ $trace -eq 1 ]; then
-		extra_args="$extra_args --verbose --debug"
-	fi
-
-	info "migrating schema using pgloader..."
-	${binaries[pgloader]} $extra_args "$load_script"
-	info "log file is available here: $(magenta $log_file)"
-
-	if cat $log_file | grep -q 'FATAL'; then
-		error "schema migration failed"
-	fi
-
-	info "summary file is available here: $(magenta $summary_file)"
-}
-
-function cleanup_postgres() {
-	if [ "$(check_dst_db_exists)" == "0" ]; then
-		info "database ${postgres_conf[db_name]} not found in postgres, nothing to cleanup. Continue"
-		return
-	fi
-
-	warning "are you sure you want to cleanup Postgres? ${postgres_conf[db_name]} database will be $(red dropped)"
-
-	local answer
-	read -p "Type 'yes' to continue: " answer
-	if [ "$answer" != "yes" ]; then
-		error "cancelled"
-	fi
-
-	local res
-	local err_msg
-	read res err_msg < <(call_psql_expect_error "DROP DATABASE IF EXISTS $(q ${postgres_conf[db_name]})" 1 postgres)
-	if [ "$err_msg" != "" ] && [ "$err_msg" != "database "\""${postgres_conf[db_name]}"\"" does not exist, skipping" ]; then
-		error "unable to drop database ${postgres_conf[db_name]}: $err_msg"
-	fi
-
-	info "database ${postgres_conf[db_name]} $(red dropped) in Postgres"
-}
-
-function run_cleanup() {
-	info "start cleanup..."
-	modify stop_conduit
-	modify cleanup_postgres
-}
-
-function toggle_indexes() {
-	local table_name="$1"
-	local action="$2" # ENABLE / DISABLE
-
-	call_psql "ALTER TABLE $(q ${postgres_conf[schema_name]}).$(q $table_name) $action TRIGGER ALL" > /dev/null
-}
-
-function disable_indexes_impl() {
-	toggle_indexes "$1" "DISABLE"
 }
 
 function list_source_tables_wo_skip() {
@@ -661,6 +419,158 @@ function list_source_table_indexes() {
 	res_ref[non_unique_key]="$(join "," nonunique_indexed_cols)"
 }
 
+function list_columns_in_source_table() {
+	local table_name="$1"
+	call_mysql "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='${mysql_conf[db_name]}' AND TABLE_NAME='$table_name'"
+}
+
+###########################################
+# End of DB Utilities
+###########################################
+
+###########################################
+# PgLoader
+###########################################
+
+function make_pgloader_tables_to_migrate_cmd() {
+	local tables=( $(list_source_tables) )
+
+	function mapper() { echo "'$1'"; }
+	map mapper tables
+
+	printf "INCLUDING ONLY TABLE NAMES MATCHING $(join ", " tables)\n"
+}
+
+function make_pgloader_rename_queries() {
+	local table_name="$1"
+	local -n queries="$2"
+
+	local table_name_lc=$(echo "$table_name" | perl -ne 'print lc')
+	if [ "$table_name_lc" != "$table_name" ]; then
+		queries+=("ALTER TABLE $(q ${postgres_conf[schema_name]}).$(q $table_name_lc) RENAME TO $(q $table_name)")
+	fi
+
+	for col_name in $(list_columns_in_source_table $table_name); do
+		local col_name_lc=$(echo "$col_name" | perl -ne 'print lc')
+
+		if [ "$col_name" != "$col_name_lc" ]; then
+			queries+=("ALTER TABLE $(q ${postgres_conf[schema_name]}).$(q $table_name) RENAME COLUMN $(q $col_name_lc) TO $(q $col_name)")
+		fi
+	done
+}
+
+function make_pgloader_after_queries() {
+	local prev_schema_name=$(echo "${mysql_conf[db_name]}" | perl -ne 'print lc') # pgloader migrates without case respect
+
+	local after_queries=( "SELECT 1" ) # need to ignore case when there is no after queries required at all
+	if [ "$prev_schema_name" != "${postgres_conf[schema_name]}" ]; then
+		after_queries+=("ALTER SCHEMA $(q $prev_schema_name) RENAME TO $(q ${postgres_conf[schema_name]})")
+		after_queries+=("ALTER DATABASE $(q ${postgres_conf[db_name]}) SET search_path = $(q ${postgres_conf[schema_name]}), public")
+	fi
+
+	for t in $(list_source_tables); do
+		make_pgloader_rename_queries "$t" after_queries
+	done
+
+	function mapper() { printf '        $$%s$$' "$1"; }
+	map mapper after_queries
+	printf "AFTER LOAD DO\n$(join $',\n' after_queries)"
+}
+
+function make_pgloader_script() {
+	local filename="$1"
+
+	local after_load_do=$(make_pgloader_after_queries)
+	local tables_to_import_q=$(make_pgloader_tables_to_migrate_cmd)
+
+	cat > $filename <<- EOM
+LOAD DATABASE
+    FROM      mysql://${mysql_conf[login]}:${mysql_conf[pass]}@${mysql_conf[host]}:${mysql_conf[port]}/${mysql_conf[db_name]}
+    INTO postgresql://${postgres_conf[login]}:${postgres_conf[pass]}@${postgres_conf[host]}:${postgres_conf[port]}/${postgres_conf[db_name]}
+    WITH SCHEMA ONLY
+    $tables_to_import_q
+    $after_load_do
+;
+EOM
+}
+
+function render_pgloader_run_script() {
+	local w_dir=$(realpath "$work_dir/pgloader")
+
+	if [ $cleanup -eq 1 ]; then
+		warning "delete directory $(magenta $w_dir)"
+		rm -rf $w_dir
+	fi
+
+	mkdir -p $w_dir
+
+	local log_file="$w_dir/pgloader.log"
+	rm -f $log_file
+
+	local summary_file="$w_dir/pgloader_summary.log"
+
+	local load_script="$w_dir/migrate.load"
+	make_pgloader_script "$load_script"
+
+	local extra_args="--summary $summary_file --root-dir $w_dir --logfile $log_file --on-error-stop"
+
+	if [ $trace -eq 1 ]; then
+		extra_args="$extra_args --verbose --debug"
+	fi
+
+	local run_script="$w_dir/run.sh"
+
+	cat > $run_script <<- EOM
+#!/bin/bash
+
+# Script migrates Schema from mysql to postgres
+
+# Create database if not exists
+$(psql_call_cmd "SELECT 1 FROM pg_database WHERE datname = \$\$${postgres_conf[db_name]}\$\$" "postgres") | grep -q 1 \\
+    || $(psql_call_cmd "CREATE DATABASE $(q ${postgres_conf[db_name]})" "postgres")
+
+pgloader $extra_args $load_script
+EOM
+
+	chmod +x $run_script
+
+	info "Schema migration script is available here: $(magenta $run_script)"
+}
+
+
+###########################################
+# End of PgLoader
+###########################################
+
+###########################################
+# Conduit
+###########################################
+
+function toggle_indexes() {
+	local table_name="$1"
+	local action="$2" # ENABLE / DISABLE
+
+	psql_call_cmd \
+		"ALTER TABLE $(q ${postgres_conf[schema_name]}).$(q $table_name) $action TRIGGER ALL" \
+		"${postgres_conf[db_name]}"
+}
+
+function disable_indexes_impl() {
+	toggle_indexes "$1" "DISABLE"
+}
+
+function disable_indexes() {
+	local res=$(list_source_tables)
+
+	if [ "$res" == "" ]; then
+		error "unable to select table names: no tables found"
+	fi
+
+	for t in $(echo "$res"); do
+		disable_indexes_impl "$t"
+	done
+}
+
 function setup_sorting_columns() {
 	local -n map_ref="$1"
 
@@ -693,24 +603,6 @@ function setup_sorting_columns() {
 		fi
 
 		error "no indexes found in table $(magenta $t): migration is not possible. Use --skip-tables arg to skip this table"
-	done
-}
-
-function list_columns_in_source_table() {
-	local table_name="$1"
-	call_mysql "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='${mysql_conf[db_name]}' AND TABLE_NAME='$table_name'"
-}
-
-function disable_indexes() {
-	local res=$(list_source_tables)
-
-	if [ "$res" == "" ]; then
-		error "unable to select table names: no tables found"
-	fi
-
-	for t in $(echo "$res"); do
-		trace "disable indexes on table $t"
-		modify "disable_indexes_impl '$t'"
 	done
 }
 
@@ -841,7 +733,7 @@ pipelines:
 $(setup_cfg_sorting_columns)
 
           sdk.batch.size: 100000
-          sdk.batch.delay: 100ms # TODO: https://github.com/ConduitIO/conduit-commons/issues/169
+          sdk.batch.delay: 100ms
 
       - id: postgresql-destination
         type: destination
@@ -864,59 +756,17 @@ function setup_conduit_run_script() {
 	cat > $path <<- EOM
 #!/bin/bash
 
-cd $(dirname ${conf[processors_dir]})
-echo "\$\$" > ${conf[pid_file]}
-${binaries[conduit]}
+# Disable triggers on Postgres database before conduit run.
+# Triggers should be enabled manually when conduit will exit snapshot mode.
+# TODO: describe snapshot mode
+$(disable_indexes)
+
+# custom-conduit should be built from \`conduit\` directory using \`make\`
+custom-conduit run --config.path ${conf[cfg_file]}
 EOM
 
 	chmod +x $path
-}
-
-function run_conduit_real() {
-	local run_script="$1"
-	local log_file="$2"
-	local pid_file="$3"
-
-	# Detach new process from console
-	setsid $run_script > $log_file 2>&1 < /dev/null &
-
-	sleep 3 # wait for conduit running
-
-	local pids="$(conduit_pids $pid_file)"
-	info "conduit is running. PIDs are: $(magenta $pids)"
-	info "use $(magenta INT) signal to stop conduit gracefully"
-	info "conduit log is available in $(magenta $log_file)"
-}
-
-function conduit_pids() {
-	local pid_file="$1"
-	if [ -f $pid_file ]; then
-		ps -s $(cat $pid_file) -o pid= | tr '\n' ' ' | perl -pe 's/\s+/ /'
-	fi
-}
-
-function stop_already_running_conduit() {
-	local pid_file="$1"
-	local signal="INT"
-
-	if [ "${2+xxx}" == "xxx" ] && [ "$2" != "" ]; then
-		signal="$2"
-	fi
-
-	local pids=$(conduit_pids $pid_file)
-	
-	if [ "$pids" != "" ]; then
-		info "conduit is already running. Stop it"
-		modify "kill -$signal $pids && sleep 5"
-	fi
-}
-
-function stop_conduit() {
-	declare -A conduit_conf
-	configure_conduit conduit_conf
-
-	stop_already_running_conduit ${conduit_conf[pid_file]} KILL
-	rm -f ${conduit_conf[pid_file]}
+	info "Data migration script is available here: $(magenta $path)"
 }
 
 function configure_conduit() {
@@ -934,7 +784,7 @@ function configure_conduit() {
 	ref[pid_file]="$w_dir/conduit.pid"
 }
 
-function run_conduit() {
+function render_conduit_run_script() {
 	declare -A conduit_conf
 	configure_conduit conduit_conf
 
@@ -942,7 +792,7 @@ function run_conduit() {
 	
 	if [ $cleanup -eq 1 ]; then
 		warning "delete directory $(magenta $w_dir)"
-		modify "rm -rf $w_dir"
+		rm -rf $w_dir
 	fi
 
 	mkdir -p $w_dir
@@ -954,45 +804,13 @@ function run_conduit() {
 	setup_base_conduit_config conduit_conf
 	setup_conduit_pipeline "${conduit_conf[pipelines_dir]}/mysql-to-postgres-${mysql_conf[db_name]}.yaml"
 
-	stop_already_running_conduit ${conduit_conf[pid_file]}
-
-	local run_script="$w_dir/run_conduit.sh"
+	local run_script="$w_dir/run.sh"
 	setup_conduit_run_script $run_script conduit_conf
-
-	if [ -f ${conduit_conf[log_file]} ]; then
-		local f=${conduit_conf[log_file]}
-		local n=0
-		while [ -f "$f.$n" ]; do
-			n=$((n+1))
-		done
-
-		info "backup previous log file as $(magenta "$f.$n")"
-		cp $f $f.$n
-	fi
-
-	info "starting conduit..."
-	modify "run_conduit_real $run_script ${conduit_conf[log_file]} ${conduit_conf[pid_file]}"
 }
 
-function run_migration() {
-	if [ $cleanup -eq 1 ]; then
-		run_cleanup
-	fi
-
-	prepare_dst_database
-
-	if [ $do_migrate_schema -eq 1 ]; then
-		migrate_schema
-	fi
-
-	disable_indexes
-	run_conduit
-
-	# TODO
-	#  * check mysql instance is in read-only mode
-	#  * check replication is disabled
-	#  * check there is no load on replica
-}
+###########################################
+# End of Conduit
+###########################################
 
 ###########################################
 # Helpers
