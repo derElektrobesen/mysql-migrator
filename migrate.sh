@@ -757,8 +757,8 @@ function setup_conduit_run_script() {
 #!/bin/bash
 
 # Disable triggers on Postgres database before conduit run.
-# Triggers should be enabled manually when conduit will exit snapshot mode.
-# TODO: describe snapshot mode
+# Triggers should be enabled manually when conduit will exit snapshot mode:
+#   when \`started cdc iterator\` conduit log message present.
 $(disable_indexes)
 
 # custom-conduit should be built from \`conduit\` directory using \`make\`
