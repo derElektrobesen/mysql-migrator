@@ -1,10 +1,11 @@
 package main
 
 import (
+	mysql "github.com/conduitio-labs/conduit-connector-mysql"
+
 	"github.com/conduitio/conduit/cmd/conduit/cli"
 	"github.com/conduitio/conduit/pkg/conduit"
 	proc_builtin "github.com/conduitio/conduit/pkg/plugin/processor/builtin"
-	mysql "github.com/derElektroBesen/conduit-connector-mysql"
 	"github.com/derElektroBesen/mysql-migrator/conduit/processor"
 )
 

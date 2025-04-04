@@ -1,12 +1,12 @@
 module github.com/derElektroBesen/mysql-migrator/conduit
 
-go 1.23.5
+go 1.24.2
 
 require (
 	github.com/conduitio/conduit v0.13.3
 	github.com/conduitio/conduit-commons v0.5.2
 	github.com/conduitio/conduit-processor-sdk v0.4.2
-	github.com/daixiang0/gci v0.13.5
+	github.com/daixiang0/gci v0.13.6
 	github.com/derElektroBesen/conduit-connector-mysql v0.0.0-20250210115328-815684ab32d4
 	github.com/golangci/golangci-lint v1.64.8
 	github.com/jackc/pgx v3.6.2+incompatible
@@ -98,6 +98,7 @@ require (
 	github.com/ckaznocha/intrange v0.3.0 // indirect
 	github.com/cockroachdb/apd v1.1.0 // indirect
 	github.com/cohere-ai/cohere-go/v2 v2.13.0 // indirect
+	github.com/conduitio-labs/conduit-connector-mysql v0.1.4-0.20250403152141-3f29cf075629 // indirect
 	github.com/conduitio/conduit-connector-file v0.10.1 // indirect
 	github.com/conduitio/conduit-connector-generator v0.10.2 // indirect
 	github.com/conduitio/conduit-connector-kafka v0.12.1 // indirect
@@ -146,7 +147,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-mysql-org/go-mysql v1.11.0 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
-	github.com/go-sql-driver/mysql v1.8.1 // indirect
+	github.com/go-sql-driver/mysql v1.9.1 // indirect
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
 	github.com/go-toolsmith/astcast v1.1.0 // indirect
 	github.com/go-toolsmith/astcopy v1.1.0 // indirect
@@ -293,7 +294,7 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/rs/cors v1.11.1 // indirect
-	github.com/rs/zerolog v1.33.0 // indirect
+	github.com/rs/zerolog v1.34.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/ryancurrah/gomodguard v1.3.5 // indirect
 	github.com/ryanrolds/sqlclosecheck v0.5.1 // indirect
