@@ -3,15 +3,19 @@ module github.com/derElektroBesen/mysql-migrator/conduit
 go 1.24.2
 
 require (
+	github.com/conduitio-labs/conduit-connector-mysql v0.1.4-0.20250407112220-390ae593d22e
 	github.com/conduitio/conduit v0.13.3
 	github.com/conduitio/conduit-commons v0.5.2
 	github.com/conduitio/conduit-processor-sdk v0.4.2
+	github.com/conduitio/ecdysis v0.4.0
 	github.com/daixiang0/gci v0.13.6
-	github.com/derElektroBesen/conduit-connector-mysql v0.0.0-20250210115328-815684ab32d4
 	github.com/golangci/golangci-lint v1.64.8
 	github.com/jackc/pgx v3.6.2+incompatible
 	github.com/jackc/pgx/v5 v5.7.2
 	github.com/jmoiron/sqlx v1.4.0
+	github.com/prometheus/client_golang v1.21.1
+	github.com/spf13/cobra v1.9.1
+	gopkg.in/yaml.v2 v2.4.0
 	mvdan.cc/gofumpt v0.7.0
 )
 
@@ -98,7 +102,6 @@ require (
 	github.com/ckaznocha/intrange v0.3.0 // indirect
 	github.com/cockroachdb/apd v1.1.0 // indirect
 	github.com/cohere-ai/cohere-go/v2 v2.13.0 // indirect
-	github.com/conduitio-labs/conduit-connector-mysql v0.1.4-0.20250403152141-3f29cf075629 // indirect
 	github.com/conduitio/conduit-connector-file v0.10.1 // indirect
 	github.com/conduitio/conduit-connector-generator v0.10.2 // indirect
 	github.com/conduitio/conduit-connector-kafka v0.12.1 // indirect
@@ -108,7 +111,6 @@ require (
 	github.com/conduitio/conduit-connector-s3 v0.9.1 // indirect
 	github.com/conduitio/conduit-connector-sdk v0.13.3 // indirect
 	github.com/conduitio/conduit-schema-registry v0.2.3 // indirect
-	github.com/conduitio/ecdysis v0.4.0 // indirect
 	github.com/conduitio/evolviconf v0.1.0 // indirect
 	github.com/conduitio/evolviconf/evolviyaml v0.1.0 // indirect
 	github.com/conduitio/yaml/v3 v3.3.0 // indirect
@@ -278,7 +280,6 @@ require (
 	github.com/pkg/profile v1.7.0 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/polyfloyd/go-errorlint v1.7.1 // indirect
-	github.com/prometheus/client_golang v1.21.1 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.63.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
@@ -321,7 +322,6 @@ require (
 	github.com/sourcegraph/go-diff v0.7.0 // indirect
 	github.com/spf13/afero v1.12.0 // indirect
 	github.com/spf13/cast v1.7.0 // indirect
-	github.com/spf13/cobra v1.9.1 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/spf13/viper v1.19.0 // indirect
 	github.com/ssgreg/nlreturn/v2 v2.2.1 // indirect
@@ -392,7 +392,6 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	honnef.co/go/tools v0.6.1 // indirect
 	modernc.org/libc v1.61.13 // indirect
